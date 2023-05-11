@@ -1,0 +1,11 @@
+---
+title: "Multivariate Data Analysis"
+author: "Juan Pablo Zaldivar && Enric Millan && Joel Sole"
+date: "2023-05-11"
+output: html_document
+---
+
+```{r setup, include=F, warnings=F, echo=F}
+library()
+```
+
