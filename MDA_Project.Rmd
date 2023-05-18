@@ -6,6 +6,48 @@ output: html_document
 ---
 
 ```{r setup, include=F, warnings=F, echo=F}
-library()
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+library(plotly)
+```
+
+```{r}
+glass <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(glass)
+```
+
+```{r}
+# Transform features into numeric
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+# Transform label as categorical
+glass$Type <- as.factor(glass$Type)
+
+unique(glass$Type)
+```
+
+
+```{r}
+cor_matrix <- cor(glass[, 1:9])  # Compute correlation matrix
+
+# Create a plotly heatmap
+heatmap <- plot_ly(
+  z = cor_matrix,
+  x = colnames(cor_matrix),
+  y = colnames(cor_matrix),
+  type = "heatmap",
+  colorscale = "YlOrRd"
+)
+
+# Add labels and title
+heatmap <- heatmap %>% layout(
+  xaxis = list(title = "Features"),
+  yaxis = list(title = "Features"),
+  title = "Correlation Heatmap"
+)
+
+# Display the heatmap
+heatmap
+
 ```
 
