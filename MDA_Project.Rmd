@@ -24,8 +24,22 @@ glass[features] <- lapply(glass[features], as.numeric)
 
 # Transform label as categorical
 glass$Type <- as.factor(glass$Type)
+```
 
+```{r}
 unique(glass$Type)
+```
+
+
+```{r}
+bar_plot <- plot_ly(data = glass, x = ~Type,
+                    color = ~Type, colors = "YlGnBu") %>%
+  add_histogram() %>%
+  layout(title = "Count of Types in Glass Dataset",
+         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
+
+# Display the bar plot
+bar_plot
 ```
 
 ```{r}
@@ -38,35 +52,22 @@ heatmap <- plot_ly(
   y = colnames(corr_matrix),
   z = corr_matrix,
   type = "heatmap",
-  colorscale = "Viridis"
+  colorscale = "YlGnBu"
 )
 
 # Add cell values to the heatmap
-heatmap <- heatmap %>% add_annotations(
-  x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
-  y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
-  text = round(corr_matrix, 2),
-  showarrow = FALSE,
-  font = list(color = "white")
-)
+heatmap <- heatmap %>%
+  add_annotations(
+    x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
+    y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
+    text = round(corr_matrix, 2),
+    showarrow = FALSE)
 
 # Display the heatmap
 heatmap
-
 ```
 
-```{r}
-label_colors <- unique(glass$Label)
 
-bar_plot <- plot_ly(data = glass, x = ~Type,
-                    color = ~Type, colors = label_colors) %>%
-  add_histogram() %>%
-  layout(title = "Count of Types in Glass Dataset",
-         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
-
-# Display the bar plot
-bar_plot
-```
 
 
 
