@@ -28,3 +28,30 @@ glass$Type <- as.factor(glass$Type)
 unique(glass$Type)
 ```
 
+```{r}
+# Compute correlation matrix
+corr_matrix <- cor(glass[, 1:9])
+
+# Create a heatmap using Plotly
+heatmap <- plot_ly(
+  x = colnames(corr_matrix),
+  y = colnames(corr_matrix),
+  z = corr_matrix,
+  type = "heatmap",
+  colorscale = "Viridis"
+)
+
+# Add cell values to the heatmap
+heatmap <- heatmap %>% add_annotations(
+  x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
+  y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
+  text = round(corr_matrix, 2),
+  showarrow = FALSE,
+  font = list(color = "white")
+)
+
+# Display the heatmap
+heatmap
+
+```
+
