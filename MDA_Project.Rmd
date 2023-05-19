@@ -55,3 +55,27 @@ heatmap
 
 ```
 
+```{r}
+label_colors <- unique(glass$Label)
+
+bar_plot <- plot_ly(data = glass, x = ~Type,
+                    color = ~Type, colors = label_colors) %>%
+  add_histogram() %>%
+  layout(title = "Count of Types in Glass Dataset",
+         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
+
+# Display the bar plot
+bar_plot
+```
+
+
+
+
+
+
+
+
+
+
+
+.
