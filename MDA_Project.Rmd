@@ -1,13 +1,15 @@
 ---
 title: "Multivariate Data Analysis"
-author: "Juan Pablo Zaldivar && Enric Millan && Joel Sole"
+author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
 date: "2023-05-11"
 output: html_document
 ---
 
 ```{r setup, include=F, warnings=F, echo=F}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+library(dplyr)
 library(plotly)
+library(ggplot2)
 ```
 
 # Exploratory data analysis
@@ -38,7 +40,6 @@ bar_plot <- plot_ly(data = glass, x = ~Type,
   layout(title = "Count of Types in Glass Dataset",
          xaxis = list(title = "Type"), yaxis = list(title = "Count"))
 
-# Display the bar plot
 bar_plot
 ```
 
@@ -67,12 +68,237 @@ heatmap <- heatmap %>%
 heatmap
 ```
 
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(glass)[-10], function(x) {
+  ggplot(glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+Ba and Fe are not very common elements.
+
+```{r}
+# Create a boxplot for each feature
+boxplots <- lapply(names(glass)[-10], function(feature) {
+  plot_ly(glass, y = ~get(feature), type = "box", name = feature)
+})
+
+# Combine the boxplots into a subplot
+subplot <- subplot(plotlist = boxplots, nrows = 3)
+
+# Visualize the subplot
+subplot
+```
+
+
+# Preprocesing
+
+The row number 40 is a duplicate of the previous row.
+
+```{r}
+anyDuplicated(glass)
+# glass <- glass[!duplicated(glass),]
+```
+
+## Data transformation
+
+```{r}
+num_features <- select_if(glass, is.numeric)
+
+# Perform tipification (standardization)
+tipified_data <- scale(num_features)
+
+# Convert the tipified data back to a dataframe
+tipified_df <- as.data.frame(tipified_data)
+
+# Combine the tipified numerical features with the categorical variable
+tipified_glass <- cbind(tipified_df, glass$Type)
+colnames(tipified_glass)[ncol(tipified_glass)] <- "Type"
+
+# Print the tipified dataset
+print(tipified_glass)
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(tipified_glass)[-10], function(x) {
+  ggplot(tipified_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(tipified_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+
+
+```{r}
+library(forecast)
+
+# Select the numerical features
+num_features <- select_if(glass, is.numeric)
+
+# Perform Box-Cox transformation
+transformed_data <- lapply(num_features, function(feature) {
+  lambda <- BoxCox.lambda(feature)
+  if (lambda == 0) {
+    log(feature + 1)
+  } else {
+    (feature^lambda - 1) / lambda
+  }
+})
+
+# Convert the transformed data back to a dataframe
+transformed_df <- as.data.frame(transformed_data)
+
+# Combine the transformed numerical features with the categorical variable
+transformed_glass <- cbind(transformed_df, glass$Type)
+colnames(transformed_glass)[ncol(transformed_glass)] <- "Type"
+
+# Print the transformed dataset
+print(transformed_glass)
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(transformed_glass)[-10], function(x) {
+  ggplot(transformed_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(transformed_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
 
 
 
+## Missing values
 
+```{r}
+sum(is.na(glass))
+```
 
+## Outliers
 
+```{r}
+# Select the numerical features
+glass_copy <- glass[, which(!(names(glass) %in% c('Ba', 'Fe')))]
+num_features <- select_if(glass_copy, is.numeric)
+
+# Detect outliers using the IQR method
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 1.5 * iqr
+  upper_bound <- q3 + 1.5 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+# Combine the outlier indexes
+outlier_indexes <- unique(unlist(outliers))
+
+# Drop the outlier rows from the "glass" dataframe
+cleaned_glass <- glass[-outlier_indexes, ]
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(cleaned_glass)[-10], function(x) {
+  ggplot(cleaned_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(cleaned_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+
+```{r}
+unique(cleaned_glass$Ba)
+```
 
 
 
@@ -80,3 +306,4 @@ heatmap
 
 
 .
+
