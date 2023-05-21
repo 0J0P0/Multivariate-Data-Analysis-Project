@@ -6,7 +6,13 @@ output: html_document
 ---
 
 ```{r setup, include=F, warnings=F, echo=F}
+
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+
+YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58")
+
+source("plots.R")
+
 library(dplyr)
 library(plotly)
 library(ggplot2)
@@ -64,53 +70,18 @@ heatmap <- heatmap %>%
     text = round(corr_matrix, 2),
     showarrow = FALSE)
 
-# Display the heatmap
 heatmap
 ```
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(glass)[-10], function(x) {
-  ggplot(glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+histogram_plots(glass, ncol(glass))
 ```
+
+
 Ba and Fe are not very common elements.
 
 ```{r}
-# Create a boxplot for each feature
-boxplots <- lapply(names(glass)[-10], function(feature) {
-  plot_ly(glass, y = ~get(feature), type = "box", name = feature)
-})
-
-# Combine the boxplots into a subplot
-subplot <- subplot(plotlist = boxplots, nrows = 3)
-
-# Visualize the subplot
-subplot
+box_plots(glass, ncol(glass))
 ```
 
 
@@ -143,34 +114,7 @@ print(tipified_glass)
 ```
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(tipified_glass)[-10], function(x) {
-  ggplot(tipified_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(tipified_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+histogram_plots(tipified_glass, ncol(tipified_glass))
 ```
 
 
@@ -202,37 +146,8 @@ print(transformed_glass)
 ```
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(transformed_glass)[-10], function(x) {
-  ggplot(transformed_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(transformed_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+histogram_plots(transformed_glass, ncol(transformed_glass))
 ```
-
-
 
 ## Missing values
 
@@ -263,42 +178,22 @@ outlier_indexes <- unique(unlist(outliers))
 
 # Drop the outlier rows from the "glass" dataframe
 cleaned_glass <- glass[-outlier_indexes, ]
+dim(cleaned_glass)
 ```
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(cleaned_glass)[-10], function(x) {
-  ggplot(cleaned_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(cleaned_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+histogram_plots(cleaned_glass, ncol(cleaned_glass))
 ```
 
-```{r}
-unique(cleaned_glass$Ba)
-```
+
+
+
+
+
+
+
+
+
 
 
 
