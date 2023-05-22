@@ -1,0 +1,429 @@
+---
+title: "Multivariate Data Analysis"
+author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
+date: "2023-05-11"
+output: html_document
+---
+
+```{r setup, include=F, warnings=F, echo=F}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+```
+
+# Exploratory data analysis
+
+```{r}
+glass <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(glass)
+```
+
+```{r}
+# Transform features into numeric
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+# Transform label as categorical
+glass$Type <- as.factor(glass$Type)
+```
+
+```{r}
+unique(glass$Type)
+```
+
+
+```{r}
+bar_plot <- plot_ly(data = glass, x = ~Type,
+                    color = ~Type, colors = "YlGnBu") %>%
+  add_histogram() %>%
+  layout(title = "Count of Types in Glass Dataset",
+         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
+
+bar_plot
+```
+
+```{r}
+# Compute correlation matrix
+corr_matrix <- cor(glass[, 1:9])
+
+# Create a heatmap using Plotly
+heatmap <- plot_ly(
+  x = colnames(corr_matrix),
+  y = colnames(corr_matrix),
+  z = corr_matrix,
+  type = "heatmap",
+  colorscale = "YlGnBu"
+)
+
+# Add cell values to the heatmap
+heatmap <- heatmap %>%
+  add_annotations(
+    x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
+    y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
+    text = round(corr_matrix, 2),
+    showarrow = FALSE)
+
+# Display the heatmap
+heatmap
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(glass)[-10], function(x) {
+  ggplot(glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+Ba and Fe are not very common elements.
+
+```{r}
+# Create a boxplot for each feature
+boxplots <- lapply(names(glass)[-10], function(feature) {
+  plot_ly(glass, y = ~get(feature), type = "box", name = feature)
+})
+
+# Combine the boxplots into a subplot
+subplot <- subplot(plotlist = boxplots, nrows = 3)
+
+# Visualize the subplot
+subplot
+```
+
+
+# Preprocesing
+
+The row number 40 is a duplicate of the previous row.
+
+```{r}
+anyDuplicated(glass)
+glass <- glass[!duplicated(glass),]
+```
+
+## Data transformation
+
+```{r}
+num_features <- select_if(glass, is.numeric)
+
+# Perform tipification (standardization)
+tipified_data <- scale(num_features)
+
+# Convert the tipified data back to a dataframe
+tipified_df <- as.data.frame(tipified_data)
+
+# Combine the tipified numerical features with the categorical variable
+tipified_glass <- cbind(tipified_df, glass$Type)
+colnames(tipified_glass)[ncol(tipified_glass)] <- "Type"
+
+# Print the tipified dataset
+print(tipified_glass)
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(tipified_glass)[-10], function(x) {
+  ggplot(tipified_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(tipified_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+
+
+```{r}
+library(forecast)
+
+# Select the numerical features
+num_features <- select_if(glass, is.numeric)
+
+# Perform Box-Cox transformation
+transformed_data <- lapply(num_features, function(feature) {
+  lambda <- BoxCox.lambda(feature)
+  if (lambda == 0) {
+    log(feature + 1)
+  } else {
+    (feature^lambda - 1) / lambda
+  }
+})
+
+# Convert the transformed data back to a dataframe
+transformed_df <- as.data.frame(transformed_data)
+
+# Combine the transformed numerical features with the categorical variable
+transformed_glass <- cbind(transformed_df, glass$Type)
+colnames(transformed_glass)[ncol(transformed_glass)] <- "Type"
+
+# Print the transformed dataset
+print(transformed_glass)
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(transformed_glass)[-10], function(x) {
+  ggplot(transformed_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(transformed_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+
+
+
+## Missing values
+
+```{r}
+sum(is.na(glass))
+```
+
+## Outliers
+
+```{r}
+# Select the numerical features
+glass_copy <- glass[, which(!(names(glass) %in% c('Ba', 'Fe')))]
+num_features <- select_if(glass_copy, is.numeric)
+
+# Detect outliers using the IQR method
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 1.5 * iqr
+  upper_bound <- q3 + 1.5 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+# Combine the outlier indexes
+outlier_indexes <- unique(unlist(outliers))
+
+# Drop the outlier rows from the "glass" dataframe
+cleaned_glass <- glass[-outlier_indexes, ]
+```
+
+```{r}
+# Create histograms for numerical features
+hist_plots <- lapply(names(cleaned_glass)[-10], function(x) {
+  ggplot(cleaned_glass, aes_string(x = x)) +
+    geom_histogram(fill = "steelblue", color = "white") +
+    theme_minimal() +
+    labs(x = x, y = "Count") +
+    ggtitle(paste("Histogram of", x))
+})
+
+# Create bar plot for categorical variable
+bar_plot <- ggplot(cleaned_glass, aes(x = Type, fill = Type)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Class", y = "Count") +
+  ggtitle("Bar Plot of Class")
+
+# Combine all plots into a subplot
+subplot <- subplot(
+  plotlist = c(hist_plots, list(bar_plot)),
+  nrows = 3,
+  margin = 0.05
+)
+
+# Convert the subplot to Plotly object
+subplot <- ggplotly(subplot)
+
+# Visualize the subplot
+subplot
+```
+
+```{r}
+unique(cleaned_glass$Ba)
+```
+
+## Clusters
+
+```{r}
+d <- dist(tipified_glass, method = "euclidean") # distance matrix
+fit <- hclust(d, method="single") 
+plot(fit,main="Dendrogram of Single Linkage") # Dendogram
+```
+
+```{r}
+fit1 <- hclust(d, method="complete") 
+plot(fit1,main="Dendrogram of complete Linkage") # Dendogram
+```
+
+```{r}
+fit2 <- hclust(d, method="average") 
+plot(fit2,main="Dendrogram of Average Linkage") # Dendogram 
+```
+
+```{r}
+fit3 <- hclust(d, method="ward.D2") 
+plot(fit3,main="Dendrogram of Ward Method") # Dendogram 
+```
+Con el método Ward se observan claramente dos grupos, en caso de que consideremos altura 30. También se pueden considerar 3 grupos si usamos una altura menor. Esta clara diferenciación que no se ha visto con previos métodos se debe a que este método, a diferencia de los previos, es robusto ante la presencia de outliers que, como se ha visto anteriormente, aparecen en cantidades notables en este dataset.
+
+```{r}
+fit4 <- hclust(d, method="centroid") 
+plot(fit4,main="Dendrogram of Centroid Method") # Dendogram 
+```
+
+### Highlighting groups
+
+El método Ward es el que nos aporta una mayor claridad sobre los grupos que se pueden formar en el dataset, por tanto lo usaremos como base.
+
+```{r}
+plot(fit3,main="Dendrogram Ward Method Linkage")
+groups <- cutree(fit3, k=2 )# c
+rect.hclust(fit3, k=2, border="green")
+
+groups <- cutree(fit3, k=3 )# c
+rect.hclust(fit3, k=3, border="blue")
+
+groups <- cutree(fit3, k=4 )# c
+rect.hclust(fit3, k=4, border="purple")
+
+groups <- cutree(fit3, k=6 )# c
+rect.hclust(fit3, k=6, border="red")
+# Con 5, Alaska se separa a un unico cluster.
+```
+Vemos que la opción más razonable parece ser la de 3 grupos, ya que las de 4 y 6 incluyen grupos muy reducidos, pero confirmemos esto con el Elbow Graph.
+
+### Elbow Graph
+
+```{r}
+aux<-c()
+for (i in 2:6) {
+  k<-kmeans(tipified_glass,centers=i,nstart=25)
+  aux[i]<-k$tot.withinss
+}
+plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
+```
+Observamos que el número óptimo de clústers es 3, tal y como habíamos teorizado,  pues en este se registra el cambio de pendiente más significativo. También hay otro cambio de pendiente con 4 grupos, pero este no parece ser tan importante, además en el dendrograma previo hemos podido observar que al hacer 4 grupos aparece uno con muy pocas muestras, cosa que no aporta gran claridad, y el resto son muy parecidos a los de 3 grupos.
+
+```{r}
+k3 <- kmeans(d, centers = 3, nstart = 25)
+str(k3)
+names(k3)
+
+aggregate(glass,by=list(k3$cluster),FUN=mean)
+# Con k=3 se explican mejor los clusters
+glass$cluster<-as.numeric(k3$cluster)
+```
+It can be observed that the third group has a much higher value in _Mg_ and a much lower value in _Ba_ than the other two groups. Meanwhile, the first group has significantly higher values in _Al_, _K_ and _Ba_ but a significantly lower value in _Mg_. Finally, the second group does not outstand neither for lower nor for higher values, beign _K_ and _Fe_ exceptions where group two has the lowest values, although the difference is not so significant for _Fe_.
+
+```{r}
+### Sum of Squares ####
+k3$withinss
+# SS en cada cluster
+k3$totss
+k3$tot.withinss
+# Suma de k4$withinss
+k3$betweenss + k3$tot.withinss # BSS + Wssq
+```
+### Silhouette Index
+
+```{r}
+#### Silhoutte Index ######
+library(cluster)
+library(HSAUR)
+library(kmed)
+
+res <- fastkmed(d, 3)
+silhouette <- sil(d, res$medoid, res$cluster)
+#silhouette$result
+silhouette$plot
+```
+```{r}
+############ Group Means ##################
+aggregate(glass[,-11],by=list(res$cluster),FUN=mean)
+
+## Comparison of Results of kmeans and kmedians
+aggregate(glass,by=list(k3$cluster),FUN=mean)
+```
+
+```{r}
+## Classification of observations based on paritition ####
+library(cluster)
+names(k3)
+clusplot(tipified_glass, k3$cluster, color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+
+c3<-clara(tipified_glass,3)
+names(c3)
+
+clusplot(tipified_glass, c3$cluster, color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+```
+The clusters formed with 'clara' are much clearer and well defined but there is still a mass of uncertain observations, around the values between 0 and 2 for component 1 and between -2 and 0 for component 2, that are mixed between two clusters.
+```{r}
+#### Clustering with Discriminant Projection Method #####
+
+library(fpc)
+
+plotcluster
+plotcluster(glass[,-10], as.integer(k3$cluster))
+plotcluster(glass[,-10],as.integer(c3$cluster))
+```
+This method appears to give a much clearer formation of clusters since the interaction between them isn't as significant as with previous methods. 
