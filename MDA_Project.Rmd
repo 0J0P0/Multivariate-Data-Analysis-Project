@@ -38,7 +38,6 @@ glass$Type <- as.factor(glass$Type)
 unique(glass$Type)
 ```
 
-
 ```{r}
 bar_plot <- plot_ly(data = glass, x = ~Type,
                     color = ~Type, colors = "YlGnBu") %>%
@@ -77,7 +76,6 @@ heatmap
 histogram_plots(glass, ncol(glass))
 ```
 
-
 Ba and Fe are not very common elements.
 
 ```{r}
@@ -87,72 +85,34 @@ box_plots(glass, ncol(glass))
 
 # Preprocesing
 
-The row number 40 is a duplicate of the previous row.
-
-```{r}
-anyDuplicated(glass)
-# glass <- glass[!duplicated(glass),]
-```
-
 ## Data transformation
 
-```{r}
-num_features <- select_if(glass, is.numeric)
-
-# Perform tipification (standardization)
-tipified_data <- scale(num_features)
-
-# Convert the tipified data back to a dataframe
-tipified_df <- as.data.frame(tipified_data)
-
-# Combine the tipified numerical features with the categorical variable
-tipified_glass <- cbind(tipified_df, glass$Type)
-colnames(tipified_glass)[ncol(tipified_glass)] <- "Type"
-
-# Print the tipified dataset
-print(tipified_glass)
-```
+...
 
 ```{r}
-histogram_plots(tipified_glass, ncol(tipified_glass))
+# Transform features into numeric
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+# Transform label as categorical
+glass$Type <- as.factor(glass$Type)
 ```
 
 
-```{r}
-library(forecast)
-
-# Select the numerical features
-num_features <- select_if(glass, is.numeric)
-
-# Perform Box-Cox transformation
-transformed_data <- lapply(num_features, function(feature) {
-  lambda <- BoxCox.lambda(feature)
-  if (lambda == 0) {
-    log(feature + 1)
-  } else {
-    (feature^lambda - 1) / lambda
-  }
-})
-
-# Convert the transformed data back to a dataframe
-transformed_df <- as.data.frame(transformed_data)
-
-# Combine the transformed numerical features with the categorical variable
-transformed_glass <- cbind(transformed_df, glass$Type)
-colnames(transformed_glass)[ncol(transformed_glass)] <- "Type"
-
-# Print the transformed dataset
-print(transformed_glass)
-```
-
-```{r}
-histogram_plots(transformed_glass, ncol(transformed_glass))
-```
 
 ## Missing values
 
 ```{r}
 sum(is.na(glass))
+```
+
+## Duplicated values
+
+The row number 40 is a duplicate of the previous row.
+
+```{r}
+anyDuplicated(glass)
+glass <- glass[!duplicated(glass),]
 ```
 
 ## Outliers
@@ -179,10 +139,6 @@ outlier_indexes <- unique(unlist(outliers))
 # Drop the outlier rows from the "glass" dataframe
 cleaned_glass <- glass[-outlier_indexes, ]
 dim(cleaned_glass)
-```
-
-```{r}
-histogram_plots(cleaned_glass, ncol(cleaned_glass))
 ```
 
 
