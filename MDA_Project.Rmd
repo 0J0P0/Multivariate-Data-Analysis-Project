@@ -21,28 +21,28 @@ library(ggplot2)
 # Exploratory data analysis
 
 ```{r}
-glass <- read.csv2("glass.csv", header=TRUE, sep=",")
-head(glass)
+df <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(df)
 ```
 
 ```{r}
 # Transform features into numeric
-features <- names(glass)[names(glass) != "Type"]
-glass[features] <- lapply(glass[features], as.numeric)
+features <- names(df)[names(df) != "Type"]
+df[features] <- lapply(df[features], as.numeric)
 
 # Transform label as categorical
-glass$Type <- as.factor(glass$Type)
+df$Type <- as.factor(df$Type)
 ```
 
 ```{r}
-unique(glass$Type)
+unique(df$Type)
 ```
 
 ```{r}
-bar_plot <- plot_ly(data = glass, x = ~Type,
+bar_plot <- plot_ly(data = df, x = ~Type,
                     color = ~Type, colors = "YlGnBu") %>%
   add_histogram() %>%
-  layout(title = "Count of Types in Glass Dataset",
+  layout(title = "Count of Types in df Dataset",
          xaxis = list(title = "Type"), yaxis = list(title = "Count"))
 
 bar_plot
@@ -50,7 +50,7 @@ bar_plot
 
 ```{r}
 # Compute correlation matrix
-corr_matrix <- cor(glass[, 1:9])
+corr_matrix <- cor(df[, 1:9])
 
 # Create a heatmap using Plotly
 heatmap <- plot_ly(
@@ -73,13 +73,13 @@ heatmap
 ```
 
 ```{r}
-histogram_plots(glass, ncol(glass))
+histogram_plots(df, ncol(df))
 ```
 
 Ba and Fe are not very common elements.
 
 ```{r}
-box_plots(glass, ncol(glass))
+box_plots(df, ncol(df))
 ```
 
 
@@ -87,23 +87,33 @@ box_plots(glass, ncol(glass))
 
 ## Data transformation
 
-...
-
 ```{r}
 # Transform features into numeric
-features <- names(glass)[names(glass) != "Type"]
-glass[features] <- lapply(glass[features], as.numeric)
+features <- names(df)[names(df) != "Type"]
+df[features] <- lapply(df[features], as.numeric)
 
 # Transform label as categorical
-glass$Type <- as.factor(glass$Type)
+df$Type <- as.factor(df$Type)
 ```
 
+As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the df instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
+
+```{r}
+df_num <- df
+# Categorize variable 'Ba'
+df$Ba <- ifelse(df$Ba != 0.0, 1, 0)
+
+# Categorize variable 'Fe'
+df$Fe <- ifelse(df$Fe != 0.0, 1, 0)
+
+df_cat <- df
+```
 
 
 ## Missing values
 
 ```{r}
-sum(is.na(glass))
+sum(is.na(df))
 ```
 
 ## Duplicated values
@@ -111,34 +121,8 @@ sum(is.na(glass))
 The row number 40 is a duplicate of the previous row.
 
 ```{r}
-anyDuplicated(glass)
-glass <- glass[!duplicated(glass),]
-```
-
-## Outliers
-
-```{r}
-# Select the numerical features
-glass_copy <- glass[, which(!(names(glass) %in% c('Ba', 'Fe')))]
-num_features <- select_if(glass_copy, is.numeric)
-
-# Detect outliers using the IQR method
-outliers <- lapply(num_features, function(feature) {
-  q1 <- quantile(feature, 0.25)
-  q3 <- quantile(feature, 0.75)
-  iqr <- q3 - q1
-  lower_bound <- q1 - 1.5 * iqr
-  upper_bound <- q3 + 1.5 * iqr
-  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
-  outlier_rows
-})
-
-# Combine the outlier indexes
-outlier_indexes <- unique(unlist(outliers))
-
-# Drop the outlier rows from the "glass" dataframe
-cleaned_glass <- glass[-outlier_indexes, ]
-dim(cleaned_glass)
+anyDuplicated(df)
+df <- df[!duplicated(df),]
 ```
 
 
