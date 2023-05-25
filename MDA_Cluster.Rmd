@@ -6,7 +6,13 @@ output: html_document
 ---
 
 ```{r setup, include=F, warnings=F, echo=F}
+
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+
+YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58")
+
+source("plots.R")
+
 library(dplyr)
 library(plotly)
 library(ggplot2)
@@ -15,29 +21,28 @@ library(ggplot2)
 # Exploratory data analysis
 
 ```{r}
-glass <- read.csv2("glass.csv", header=TRUE, sep=",")
-head(glass)
+df <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(df)
 ```
 
 ```{r}
 # Transform features into numeric
-features <- names(glass)[names(glass) != "Type"]
-glass[features] <- lapply(glass[features], as.numeric)
+features <- names(df)[names(df) != "Type"]
+df[features] <- lapply(df[features], as.numeric)
 
 # Transform label as categorical
-glass$Type <- as.factor(glass$Type)
+df$Type <- as.factor(df$Type)
 ```
 
 ```{r}
-unique(glass$Type)
+unique(df$Type)
 ```
 
-
 ```{r}
-bar_plot <- plot_ly(data = glass, x = ~Type,
+bar_plot <- plot_ly(data = df, x = ~Type,
                     color = ~Type, colors = "YlGnBu") %>%
   add_histogram() %>%
-  layout(title = "Count of Types in Glass Dataset",
+  layout(title = "Count of Types in df Dataset",
          xaxis = list(title = "Type"), yaxis = list(title = "Count"))
 
 bar_plot
@@ -45,7 +50,7 @@ bar_plot
 
 ```{r}
 # Compute correlation matrix
-corr_matrix <- cor(glass[, 1:9])
+corr_matrix <- cor(df[, 1:9])
 
 # Create a heatmap using Plotly
 heatmap <- plot_ly(
@@ -64,246 +69,66 @@ heatmap <- heatmap %>%
     text = round(corr_matrix, 2),
     showarrow = FALSE)
 
-# Display the heatmap
 heatmap
 ```
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(glass)[-10], function(x) {
-  ggplot(glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+histogram_plots(df, ncol(df))
 ```
+
 Ba and Fe are not very common elements.
 
 ```{r}
-# Create a boxplot for each feature
-boxplots <- lapply(names(glass)[-10], function(feature) {
-  plot_ly(glass, y = ~get(feature), type = "box", name = feature)
-})
-
-# Combine the boxplots into a subplot
-subplot <- subplot(plotlist = boxplots, nrows = 3)
-
-# Visualize the subplot
-subplot
+box_plots(df, ncol(df))
 ```
 
 
 # Preprocesing
 
-The row number 40 is a duplicate of the previous row.
-
-```{r}
-anyDuplicated(glass)
-glass <- glass[!duplicated(glass),]
-```
-
 ## Data transformation
 
 ```{r}
-num_features <- select_if(glass, is.numeric)
+# Transform features into numeric
+features <- names(df)[names(df) != "Type"]
+df[features] <- lapply(df[features], as.numeric)
 
-# Perform tipification (standardization)
-tipified_data <- scale(num_features)
-
-# Convert the tipified data back to a dataframe
-tipified_df <- as.data.frame(tipified_data)
-
-# Combine the tipified numerical features with the categorical variable
-tipified_glass <- cbind(tipified_df, glass$Type)
-colnames(tipified_glass)[ncol(tipified_glass)] <- "Type"
-
-# Print the tipified dataset
-print(tipified_glass)
+# Transform label as categorical
+df$Type <- as.factor(df$Type)
 ```
+
+As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the df instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
 
 ```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(tipified_glass)[-10], function(x) {
-  ggplot(tipified_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
+df_num <- df
+# Categorize variable 'Ba'
+df$Ba <- ifelse(df$Ba != 0.0, 1, 0)
 
-# Create bar plot for categorical variable
-bar_plot <- ggplot(tipified_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
+# Categorize variable 'Fe'
+df$Fe <- ifelse(df$Fe != 0.0, 1, 0)
 
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
+df_cat <- df
 ```
-
-
-```{r}
-library(forecast)
-
-# Select the numerical features
-num_features <- select_if(glass, is.numeric)
-
-# Perform Box-Cox transformation
-transformed_data <- lapply(num_features, function(feature) {
-  lambda <- BoxCox.lambda(feature)
-  if (lambda == 0) {
-    log(feature + 1)
-  } else {
-    (feature^lambda - 1) / lambda
-  }
-})
-
-# Convert the transformed data back to a dataframe
-transformed_df <- as.data.frame(transformed_data)
-
-# Combine the transformed numerical features with the categorical variable
-transformed_glass <- cbind(transformed_df, glass$Type)
-colnames(transformed_glass)[ncol(transformed_glass)] <- "Type"
-
-# Print the transformed dataset
-print(transformed_glass)
-```
-
-```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(transformed_glass)[-10], function(x) {
-  ggplot(transformed_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(transformed_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
-```
-
 
 
 ## Missing values
 
 ```{r}
-sum(is.na(glass))
+sum(is.na(df))
 ```
 
-## Outliers
+## Duplicated values
+
+The row number 40 is a duplicate of the previous row.
 
 ```{r}
-# Select the numerical features
-glass_copy <- glass[, which(!(names(glass) %in% c('Ba', 'Fe')))]
-num_features <- select_if(glass_copy, is.numeric)
-
-# Detect outliers using the IQR method
-outliers <- lapply(num_features, function(feature) {
-  q1 <- quantile(feature, 0.25)
-  q3 <- quantile(feature, 0.75)
-  iqr <- q3 - q1
-  lower_bound <- q1 - 1.5 * iqr
-  upper_bound <- q3 + 1.5 * iqr
-  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
-  outlier_rows
-})
-
-# Combine the outlier indexes
-outlier_indexes <- unique(unlist(outliers))
-
-# Drop the outlier rows from the "glass" dataframe
-cleaned_glass <- glass[-outlier_indexes, ]
-```
-
-```{r}
-# Create histograms for numerical features
-hist_plots <- lapply(names(cleaned_glass)[-10], function(x) {
-  ggplot(cleaned_glass, aes_string(x = x)) +
-    geom_histogram(fill = "steelblue", color = "white") +
-    theme_minimal() +
-    labs(x = x, y = "Count") +
-    ggtitle(paste("Histogram of", x))
-})
-
-# Create bar plot for categorical variable
-bar_plot <- ggplot(cleaned_glass, aes(x = Type, fill = Type)) +
-  geom_bar() +
-  theme_minimal() +
-  labs(x = "Class", y = "Count") +
-  ggtitle("Bar Plot of Class")
-
-# Combine all plots into a subplot
-subplot <- subplot(
-  plotlist = c(hist_plots, list(bar_plot)),
-  nrows = 3,
-  margin = 0.05
-)
-
-# Convert the subplot to Plotly object
-subplot <- ggplotly(subplot)
-
-# Visualize the subplot
-subplot
-```
-
-```{r}
-unique(cleaned_glass$Ba)
+anyDuplicated(df)
+df <- df[!duplicated(df),]
 ```
 
 ## Clusters
 
 ```{r}
-d <- dist(tipified_glass, method = "euclidean") # distance matrix
+d <- dist(df_num, method = "euclidean") # distance matrix
 fit <- hclust(d, method="single") 
 plot(fit,main="Dendrogram of Single Linkage") # Dendogram
 ```
@@ -355,7 +180,7 @@ Vemos que la opción más razonable parece ser la de 3 grupos, ya que las de 4 y
 ```{r}
 aux<-c()
 for (i in 2:6) {
-  k<-kmeans(tipified_glass,centers=i,nstart=25)
+  k<-kmeans(df_num,centers=i,nstart=25)
   aux[i]<-k$tot.withinss
 }
 plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
@@ -367,9 +192,9 @@ k3 <- kmeans(d, centers = 3, nstart = 25)
 str(k3)
 names(k3)
 
-aggregate(glass,by=list(k3$cluster),FUN=mean)
+aggregate(df_num,by=list(k3$cluster),FUN=mean)
 # Con k=3 se explican mejor los clusters
-glass$cluster<-as.numeric(k3$cluster)
+df_num$cluster<-as.numeric(k3$cluster)
 ```
 It can be observed that the third group has a much higher value in _Mg_ and a much lower value in _Ba_ than the other two groups. Meanwhile, the first group has significantly higher values in _Al_, _K_ and _Ba_ but a significantly lower value in _Mg_. Finally, the second group does not outstand neither for lower nor for higher values, beign _K_ and _Fe_ exceptions where group two has the lowest values, although the difference is not so significant for _Fe_.
 
@@ -397,33 +222,35 @@ silhouette$plot
 ```
 ```{r}
 ############ Group Means ##################
-aggregate(glass[,-11],by=list(res$cluster),FUN=mean)
+aggregate(df_num[,-11],by=list(res$cluster),FUN=mean)
 
 ## Comparison of Results of kmeans and kmedians
-aggregate(glass,by=list(k3$cluster),FUN=mean)
+aggregate(df_num,by=list(k3$cluster),FUN=mean)
 ```
 
 ```{r}
 ## Classification of observations based on paritition ####
 library(cluster)
 names(k3)
-clusplot(tipified_glass, k3$cluster, color=TRUE, shade=TRUE,
+clusplot(df_num, k3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
 
-c3<-clara(tipified_glass,3)
+c3<-clara(df_num,3)
 names(c3)
 
-clusplot(tipified_glass, c3$cluster, color=TRUE, shade=TRUE,
+clusplot(df_num, c3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
 ```
+
 The clusters formed with 'clara' are much clearer and well defined but there is still a mass of uncertain observations, around the values between 0 and 2 for component 1 and between -2 and 0 for component 2, that are mixed between two clusters.
+
 ```{r}
 #### Clustering with Discriminant Projection Method #####
 
 library(fpc)
 
 plotcluster
-plotcluster(glass[,-10], as.integer(k3$cluster))
-plotcluster(glass[,-10],as.integer(c3$cluster))
+plotcluster(df_num[,-10], as.integer(k3$cluster))
+plotcluster(df_num[,-10],as.integer(c3$cluster))
 ```
 This method appears to give a much clearer formation of clusters since the interaction between them isn't as significant as with previous methods. 
