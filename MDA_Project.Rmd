@@ -16,6 +16,7 @@ source("plots.R")
 library(dplyr)
 library(plotly)
 library(ggplot2)
+library(qqplotr)
 ```
 
 # Exploratory data analysis
@@ -73,13 +74,13 @@ heatmap
 ```
 
 ```{r}
-histogram_plots(df, ncol(df))
+histogram_plots(df[, -c(10)])
 ```
 
 Ba and Fe are not very common elements.
 
 ```{r}
-box_plots(df, ncol(df))
+box_plots(df[, -c(10)])
 ```
 
 
@@ -126,7 +127,81 @@ df <- df[!duplicated(df),]
 ```
 
 
+# Linear Discriminant Analysis
 
+## Normality assumptions
+
+```{r}
+histogram_plots(df_cat[, -c(10)])
+```
+
+- K and Mg doesnt seem too normal to me
+
+```{r}
+qq_plots(df_cat[,-c(8, 9, 10)])
+```
+
+
+```{r}
+for (i in 2:6){
+  print(colnames(df_cat)[i])
+  print(shapiro.test(df_cat[,i])$p.value)
+}
+```
+
+```{r}
+num_features <- select_if(df_cat, is.numeric)
+
+# Detect outliers using the IQR method
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 1.5 * iqr
+  upper_bound <- q3 + 1.5 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+# Combine the outlier indexes
+outlier_indexes <- unique(unlist(outliers))
+
+# Drop the outlier rows from the "glass" dataframe
+df_cat_clean <- df_cat[-outlier_indexes, ]
+```
+
+```{r}
+num_features <- select_if(df_cat_clean, is.numeric)
+
+# Perform tipification (standardization)
+tipified_data <- scale(num_features)
+
+# Convert the tipified data back to a dataframe
+tipified_df <- as.data.frame(tipified_data)
+
+# Combine the tipified numerical features with the categorical variable
+tipified_df <- cbind(tipified_df, df_cat_clean$Type)
+colnames(tipified_df)[ncol(tipified_df)] <- "Type"
+```
+
+```{r}
+qq_plots(tipified_df[,-c(8,9,10)])
+```
+
+
+```{r}
+for (i in 2:6){
+  print(colnames(tipified_df)[i])
+  print(shapiro.test(tipified_df[,i])$p.value)
+}
+```
+
+
+
+## Homocedasticity assumptions
+
+
+## Train-Test split
 
 
 
