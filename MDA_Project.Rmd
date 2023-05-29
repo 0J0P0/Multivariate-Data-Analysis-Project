@@ -17,7 +17,11 @@ library(dplyr)
 library(plotly)
 library(ggplot2)
 library(qqplotr)
+library(caTools)
 library(biotools)
+
+# Set the seed for reproducibility
+set.seed(123)
 ```
 
 # Exploratory data analysis
@@ -98,6 +102,8 @@ box_plots(glass[, -c(10)])
 
 ## Data transformation
 
+As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
+
 ```{r}
 # Transform features into numeric
 features <- names(glass)[names(glass) != "Type"]
@@ -106,8 +112,6 @@ glass[features] <- lapply(glass[features], as.numeric)
 # Transform label as categorical
 glass$Type <- as.factor(glass$Type)
 ```
-
-As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
 
 ## Missing values
 
@@ -138,9 +142,9 @@ df_cat$Type <- as.factor(df_cat$Type)
 ```
 
 
-# Linear Discriminant Analysis
+# Discriminant Analysis
 
-In order to perform LDA, normality and homodestacity assumptions have to be validated for predictor variables (features) are said to be normally distributed and with equal covariance matrices within each class.
+In order to perform DA, normality and homodestacity assumptions have to be validated for predictor variables (features) are said to be normally distributed and with equal covariance matrices within each class.
 
 ## Normality assumptions
 
@@ -149,9 +153,9 @@ histogram_plots(df_cat[, -c(8, 9, 10)])
 box_plots(df_cat[, -c(8, 9, 10)])
 ```
 
-The histograms seem to approve normality for all the features except **RI**, **Mg** and **K**. The QQplots shown below also confirm this assumption, although, the presence of outliers is notorious and may have to be checked as commented further on.
+The histograms seem to approve normality for all the features except **RI**, **Mg** and **K**. The QQ-plots shown below also confirm this assumption, although, the presence of outliers is quite notorious and may have to be checked as commented further on.
 
-_The **Mg** variable presents a lot samples with zero values, which alterates the distribution from normality. There are two brs with a high frequency of samples, which can also be noted from the QQplot, making it differ from the normality line and suggest that maybe this variable should be treated as a categorical variable._
+_The **Mg** variable presents a lot samples with zero values, which disturbs the distribution from normality. There are two bars with a high frequency of samples, which can also be noted from the QQ-plot, making it differ from the normality line and suggesting that maybe this variable should be treated as a categorical variable._
 
 Regarding the **K** feature, most of the samples have values in the lower range of the histogram, but there are some observations which lie an abnormal distance from the range of most frequent values, which causes the histogram to differ from the normality assumption as well as in the previous cases. Notice that the observations lie almost perfectly over the normality line for the theoretical quantiles, but the two-three samples at the top disrupt the whole normality structure.
 
@@ -170,6 +174,8 @@ For that reason, an outlier treatment will be conducted with the intent of valid
 
 ### Aditional outlier treatment
 
+The detection of outliers was done with the IQR method. For the lower and upper bound of non-outliers point, the value $1.5$ is used as a multiplier to determine the threshold for identifying outliers.
+
 ```{r}
 num_features <- select_if(df_cat, is.numeric)
 
@@ -178,7 +184,7 @@ outliers <- lapply(num_features, function(feature) {
   q1 <- quantile(feature, 0.25)
   q3 <- quantile(feature, 0.75)
   iqr <- q3 - q1
-  lower_bound <- q1 - 1.5 * iqr
+  lower_bound <- q1 - 1.5 * iqr 
   upper_bound <- q3 + 1.5 * iqr
   outlier_rows <- which(feature < lower_bound | feature > upper_bound)
   outlier_rows
@@ -211,6 +217,24 @@ boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
 
 ## Train-Test split
 
+```{r}
+# Split the dataset into training and testing sets
+split <- sample.split(df_cat_clean$Type, SplitRatio = 0.33)
+train <- subset(df_cat_clean, split == TRUE)
+test <- subset(df_cat_clean, split == FALSE)
+```
+
+
+## QDA
+
+```{r}
+names(df_cat_clean)
+```
+
+```{r}
+qda.fit <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train)
+qda.fit
+```
 
 
 
