@@ -14,6 +14,7 @@ YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#2
 source("plots.R")
 
 library(dplyr)
+library(MASS)
 library(plotly)
 library(ggplot2)
 library(qqplotr)
@@ -112,6 +113,7 @@ glass[features] <- lapply(glass[features], as.numeric)
 # Transform label as categorical
 glass$Type <- as.factor(glass$Type)
 ```
+
 
 ## Missing values
 
@@ -219,10 +221,68 @@ boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
 
 ```{r}
 # Split the dataset into training and testing sets
-split <- sample.split(df_cat_clean$Type, SplitRatio = 0.33)
+split <- sample.split(df_cat_clean$Type, SplitRatio = 0.66)
 train <- subset(df_cat_clean, split == TRUE)
 test <- subset(df_cat_clean, split == FALSE)
+
+dim(df_cat_clean); dim(train); dim(test)
 ```
+
+
+## LDA
+
+```{r}
+train_step <- stepclass(train[,1:7],train[,10],method="lda",direction="backward", criterion="CR")
+train_step$formula
+```
+
+
+```{r}
+mod_lda <- lda(Type~RI+Na+Mg+Al+Si+K+Ca, data=train)
+# mod_lda
+```
+
+```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
+
+partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
+         nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
+```
+
+
+### Test prediction
+
+```{r}
+test_pred <- predict(mod_lda, test)
+test_pred$class == test$Type
+```
+
+```{r}
+tab <- table(test$Type, test_pred$class)
+tab
+```
+
+```{r}
+# Correct Classification Rate (CCR)
+classrate <- sum(diag(tab))/sum(tab)
+classrate
+```
+
+```{r}
+# Prediction Accuracy
+PA <- mod_lda$prior[1]^2 + mod_lda$prior[2]^2 + mod_lda$prior[3]^2 + 
+  mod_lda$prior[4]^2 + mod_lda$prior[5]^2 + mod_lda$prior[6]^2
+PA
+```
+
+```{r}
+ny <- sum(diag(tab))
+n <- nrow(test)
+k <- 6
+Qlda <- ((n-ny*k)^2)/(n*(k-1))
+Qlda
+```
+
 
 
 ## QDA
