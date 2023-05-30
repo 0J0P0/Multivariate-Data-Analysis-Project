@@ -13,8 +13,9 @@ YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#2
 
 source("plots.R")
 
-library(dplyr)
 library(MASS)
+library(klaR)
+library(dplyr)
 library(plotly)
 library(ggplot2)
 library(qqplotr)
@@ -284,7 +285,6 @@ Qlda
 ```
 
 
-
 ## QDA
 
 ```{r}
@@ -292,6 +292,18 @@ names(df_cat_clean)
 ```
 
 ```{r}
+sum(train$Type == 1)
+sum(train$Type == 2)
+sum(train$Type == 3)
+sum(train$Type == 5)
+sum(train$Type == 6)
+sum(train$Type == 7)
+
+
+train <- train[!(train$Type %in% c(3,5,6,7)),]
+
+dim(train)
+
 qda.fit <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train)
 qda.fit
 ```
