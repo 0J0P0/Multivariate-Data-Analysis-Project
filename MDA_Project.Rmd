@@ -222,7 +222,7 @@ boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
 
 ```{r}
 # Split the dataset into training and testing sets
-split <- sample.split(df_cat_clean$Type, SplitRatio = 0.66)
+split <- sample.split(df_cat_clean$Type, SplitRatio = 0.7)
 train <- subset(df_cat_clean, split == TRUE)
 test <- subset(df_cat_clean, split == FALSE)
 
@@ -240,7 +240,6 @@ train_step$formula
 
 ```{r}
 mod_lda <- lda(Type~RI+Na+Mg+Al+Si+K+Ca, data=train)
-# mod_lda
 ```
 
 ```{r}
@@ -257,6 +256,26 @@ partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
 test_pred <- predict(mod_lda, test)
 test_pred$class == test$Type
 ```
+
+
+```{r}
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD1, y=LD2, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD2, y=LD3, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD3, y=LD4, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD4, y=LD5, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+```
+
 
 ```{r}
 tab <- table(test$Type, test_pred$class)
@@ -292,24 +311,81 @@ names(df_cat_clean)
 ```
 
 ```{r}
-sum(train$Type == 1)
-sum(train$Type == 2)
-sum(train$Type == 3)
-sum(train$Type == 5)
-sum(train$Type == 6)
-sum(train$Type == 7)
-
-
-train <- train[!(train$Type %in% c(3,5,6,7)),]
-
-dim(train)
-
-qda.fit <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train)
-qda.fit
+table(train$Type)
 ```
 
 
+```{r}
+# train.qda <- train[!(train$Type %in% c(5,6,7)),]
+# train.qda$Type <- droplevels(train.qda$Type)
 
+# table(df_cat_clean$Type)
+table(df_cat$Type)
+
+df_cat.qda <- df_cat[df_cat$Type != 6,]
+df_cat.qda$Type <- droplevels(df_cat.qda$Type)
+
+# mod_qda <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train.qda)
+mod_qda <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = df_cat.qda)
+mod_qda
+```
+
+```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
+
+# partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
+#          nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
+```
+
+
+### Test prediction
+
+```{r}
+test_pred.qda <- predict(mod_qda, test)
+# test_pred.qda$class == test$Type
+```
+
+```{r}
+# test_pred.qda$x
+```
+
+
+```{r}
+# ggplotly(ggplot(test_pred.qda$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD1, y=LD2, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+# 
+# ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD2, y=LD3, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+# 
+# ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD3, y=LD4, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+# 
+# ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD4, y=LD5, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+```
+
+```{r}
+# tab <- table(test$Type, test_pred.qda$class)
+# tab
+```
+
+```{r}
+# # Correct Classification Rate (CCR)
+# classrate <- sum(diag(tab))/sum(tab)
+# classrate
+```
+
+```{r}
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
+```
 
 
 
