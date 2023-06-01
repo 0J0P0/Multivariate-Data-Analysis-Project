@@ -1,0 +1,224 @@
+---
+title: "Multivariate Data Analysis"
+author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
+date: "2023-05-11"
+output: html_document
+---
+
+```{r setup, include=F, warnings=F, echo=F}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+
+YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58")
+
+source("plots.R")
+
+library(MASS)
+library(klaR)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(qqplotr)
+library(caTools)
+library(biotools)
+
+# Set the seed for reproducibility
+set.seed(123)
+```
+
+# Exploratory data analysis
+
+
+The given dataset consists of measurements of various chemical properties of glass samples, along with their corresponding types. The dataset contains 10 features and 214 instances.
+
+Each row in the dataset corresponds to a specific glass sample and provides the measurements of the aforementioned features, as well as the type of glass it belongs to.
+
+```{r}
+glass <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(glass)
+```
+
+```{r}
+# Transform features into numeric
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+# Transform label as categorical
+glass$Type <- as.factor(glass$Type)
+```
+
+The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six diffrenet levels (for a more detailed explanation of each level see the appendix).
+
+```{r}
+unique(glass$Type)
+```
+
+```{r}
+bar_plot <- plot_ly(data = glass, x = ~Type,
+                    color = ~Type, colors = "YlGnBu") %>%
+  add_histogram() %>%
+  layout(title = "Count of Types in glass Dataset",
+         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
+
+bar_plot
+```
+
+The dataset is pretty unbalanced. The instances of **types** 1 and 2 constitute more than $67%$ of the glass types.
+
+```{r}
+# Compute correlation matrix
+corr_matrix <- cor(glass[, 1:9])
+
+# Create a heatmap using Plotly
+heatmap <- plot_ly(
+  x = colnames(corr_matrix),
+  y = colnames(corr_matrix),
+  z = corr_matrix,
+  type = "heatmap",
+  colorscale = "YlGnBu"
+)
+
+# Add cell values to the heatmap
+heatmap <- heatmap %>%
+  add_annotations(
+    x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
+    y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
+    text = round(corr_matrix, 2),
+    showarrow = FALSE)
+
+heatmap
+```
+
+```{r}
+histogram_plots(glass[, -c(10)])
+```
+
+Ba and Fe are not very common elements.
+
+```{r}
+box_plots(glass[, -c(10)])
+```
+
+
+# Preprocesing
+
+## Data transformation
+
+As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
+
+```{r}
+# Transform features into numeric
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+# Transform label as categorical
+glass$Type <- as.factor(glass$Type)
+```
+
+
+## Missing values
+
+```{r}
+sum(is.na(glass))
+```
+
+## Duplicated values
+
+The row number 40 is a duplicate of the previous row.
+
+```{r}
+anyDuplicated(glass)
+glass <- glass[!duplicated(glass),]
+```
+
+```{r}
+df_cat <- glass
+# Categorize variable 'Ba'
+df_cat$Ba <- ifelse(glass$Ba != 0.0, 1, 0)
+df_cat$Ba <- as.factor(df_cat$Ba)
+
+# Categorize variable 'Fe'
+df_cat$Fe <- ifelse(glass$Fe != 0.0, 1, 0)
+df_cat$Fe <- as.factor(df_cat$Fe)
+
+df_cat$Type <- as.factor(df_cat$Type)
+```
+
+
+# PCA
+
+We will apply PCA to the features of the dataset, using the Type variable as supplementary variable
+
+```{r}
+library(FactoMineR)
+
+# Assuming your dataset is named "glass"
+# Remove the "Type" column from the dataset
+numerical_data <- glass[, !names(glass) %in% "Type"]
+
+# Extract the "Type" column as supplementary variable
+supplementary_var <- glass$Type
+
+# Apply PCA to the numerical data, specifying the supplementary variable
+pca <- PCA(numerical_data, scale = TRUE, quali.sup = supplementary_var)
+
+# Access the results of PCA
+summary(pca)      # Summary statistics of the PCA
+eig <- get_eigenvalue(pca)     # Eigenvalues
+var <- get_pca_var(pca)        # Variables' contributions to dimensions
+
+# Plotting the results (example plot)
+plot.PCA(pca, axes = c(1, 2), habillage = glass$Type)
+
+```
+
+
+
+
+
+
+
+
+
+
+.
+
+# Feature description
+
+The features in the dataset are as follows:
+
+RI: Refractive Index (continuous) - It represents the ratio of the speed of light in a vacuum to the speed of light in the glass sample. It is a measure of how much the light is bent as it passes through the glass.
+
+Na: Sodium (continuous) - It denotes the amount of sodium (in weight percent) present in the glass.
+
+Mg: Magnesium (continuous) - It represents the amount of magnesium (in weight percent) present in the glass.
+
+Al: Aluminum (continuous) - It signifies the amount of aluminum (in weight percent) present in the glass.
+
+Si: Silicon (continuous) - It denotes the amount of silicon (in weight percent) present in the glass.
+
+K: Potassium (continuous) - It represents the amount of potassium (in weight percent) present in the glass.
+
+Ca: Calcium (continuous) - It signifies the amount of calcium (in weight percent) present in the glass.
+
+Ba: Barium (continuous) - It represents the amount of barium (in weight percent) present in the glass.
+
+Fe: Iron (continuous) - It denotes the amount of iron (in weight percent) present in the glass.
+
+Type: Type of glass (discrete) - It represents the type of glass sample. There are six distinct types ranging from 1 to 7, excluding the 4th one.
+
+## Type varibale description
+
+Building_windows_float_processed: This level represents glass used for building windows that has undergone a float processing method. Float processing involves floating molten glass on a bed of molten metal to produce a smooth and flat surface.
+
+Building_windows_non_float_processed: This level represents glass used for building windows that has not undergone a float processing method. It may have been processed using alternative methods.
+
+Vehicle_windows_float_processed: This level represents glass used for vehicle windows that has undergone a float processing method. It is specifically processed for automotive applications.
+
+Vehicle_windows_non_float_processed: Although not present in this particular database, this level would represent glass used for vehicle windows that has not undergone a float processing method. Similar to the previous category, it may have been processed using alternative methods.
+
+Containers: This level represents glass used for containers such as bottles or jars.
+
+Tableware: This level represents glass used for tableware items such as plates, bowls, or glasses.
+
+Headlamps: This level represents glass used for headlamp lenses in automotive lighting systems.
