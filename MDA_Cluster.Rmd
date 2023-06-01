@@ -85,21 +85,6 @@ box_plots(df, ncol(df))
 
 # Preprocesing
 
-## Missing values
-
-```{r}
-sum(is.na(df))
-```
-
-## Duplicated values
-
-The row number 40 is a duplicate of the previous row.
-
-```{r}
-anyDuplicated(df)
-df <- df[!duplicated(df),]
-```
-
 ## Data transformation
 
 ```{r}
@@ -125,11 +110,25 @@ df_cat <- df
 ```
 
 
+## Missing values
+
+```{r}
+sum(is.na(df))
+```
+
+## Duplicated values
+
+The row number 40 is a duplicate of the previous row.
+
+```{r}
+anyDuplicated(df)
+df <- df[!duplicated(df),]
+```
 
 ## Clusters
 
 ```{r}
-d <- dist(df_cat, method = "euclidean") # distance matrix
+d <- dist(df_num, method = "euclidean") # distance matrix
 fit <- hclust(d, method="single") 
 plot(fit,main="Dendrogram of Single Linkage") # Dendogram
 ```
@@ -148,7 +147,7 @@ plot(fit2,main="Dendrogram of Average Linkage") # Dendogram
 fit3 <- hclust(d, method="ward.D2") 
 plot(fit3,main="Dendrogram of Ward Method") # Dendogram 
 ```
-With the Ward method, two distinct groups are clearly observed when considering a height of 30. If we use a lower height, we can also consider three groups. This clear differentiation, which was not seen with previous methods, is due to the fact that this method, unlike the previous ones, is robust in the presence of outliers. As seen in the EDA, the bar plots showed some possible outliers so that would explain why this method works better.
+Con el método Ward se observan claramente dos grupos, en caso de que consideremos altura 30. También se pueden considerar 3 grupos si usamos una altura menor. Esta clara diferenciación que no se ha visto con previos métodos se debe a que este método, a diferencia de los previos, es robusto ante la presencia de outliers que, como se ha visto anteriormente, aparecen en cantidades notables en este dataset.
 
 ```{r}
 fit4 <- hclust(d, method="centroid") 
@@ -157,7 +156,7 @@ plot(fit4,main="Dendrogram of Centroid Method") # Dendogram
 
 ### Highlighting groups
 
-The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset; therefore, we will use it from now on.
+El método Ward es el que nos aporta una mayor claridad sobre los grupos que se pueden formar en el dataset, por tanto lo usaremos como base.
 
 ```{r}
 plot(fit3,main="Dendrogram Ward Method Linkage")
@@ -174,30 +173,30 @@ groups <- cutree(fit3, k=6 )# c
 rect.hclust(fit3, k=6, border="red")
 # Con 5, Alaska se separa a un unico cluster.
 ```
-We see that the most reasonable option appears to be the one with 3 groups, as the ones with 4 and 6 include very small groups. However, let's confirm this with the Elbow Graph.
+Vemos que la opción más razonable parece ser la de 3 grupos, ya que las de 4 y 6 incluyen grupos muy reducidos, pero confirmemos esto con el Elbow Graph.
 
 ### Elbow Graph
 
 ```{r}
 aux<-c()
 for (i in 2:6) {
-  k<-kmeans(df_cat,centers=i,nstart=25)
+  k<-kmeans(df_num,centers=i,nstart=25)
   aux[i]<-k$tot.withinss
 }
 plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
 ```
-We observe that the optimal number of clusters is 3, as we had theorized, as it shows the most significant change in slope. There is also another change in slope with 4 groups, but it does not appear to be as important. Additionally, in the previous dendrogram, we were able to observe that when creating 4 groups, one of them contains very few samples, which does not provide much clarity, and the remaining groups are very similar to those of the 3-group solution.
+Observamos que el número óptimo de clústers es 3, tal y como habíamos teorizado,  pues en este se registra el cambio de pendiente más significativo. También hay otro cambio de pendiente con 4 grupos, pero este no parece ser tan importante, además en el dendrograma previo hemos podido observar que al hacer 4 grupos aparece uno con muy pocas muestras, cosa que no aporta gran claridad, y el resto son muy parecidos a los de 3 grupos.
 
 ```{r}
 k3 <- kmeans(d, centers = 3, nstart = 25)
 str(k3)
 names(k3)
 
-aggregate(df_cat,by=list(k3$cluster),FUN=mean)
+aggregate(df_num,by=list(k3$cluster),FUN=mean)
 # Con k=3 se explican mejor los clusters
-df_cat$cluster<-as.numeric(k3$cluster)
+df_num$cluster<-as.numeric(k3$cluster)
 ```
-It can be observed that the first group has a much higher value in _Mg_ and a much lower value in _Ba_ than the other two groups. Meanwhile, the second group has significantly higher values in  _K_ and _Ca_ but a practically null value in _Mg_. Finally, the third group does not outstand neither for much lower nor for much higher values than the other two, being _K_ and _Fe_ exceptions where group two has the lowest values, although the difference is not so significant as already mentioned.
+It can be observed that the third group has a much higher value in _Mg_ and a much lower value in _Ba_ than the other two groups. Meanwhile, the first group has significantly higher values in _Al_, _K_ and _Ba_ but a significantly lower value in _Mg_. Finally, the second group does not outstand neither for lower nor for higher values, beign _K_ and _Fe_ exceptions where group two has the lowest values, although the difference is not so significant for _Fe_.
 
 ```{r}
 ### Sum of Squares ####
@@ -223,27 +222,27 @@ silhouette$plot
 ```
 ```{r}
 ############ Group Means ##################
-aggregate(df_cat[,-11],by=list(res$cluster),FUN=mean)
+aggregate(df_num[,-11],by=list(res$cluster),FUN=mean)
 
 ## Comparison of Results of kmeans and kmedians
-aggregate(df_cat,by=list(k3$cluster),FUN=mean)
+aggregate(df_num,by=list(k3$cluster),FUN=mean)
 ```
 
 ```{r}
 ## Classification of observations based on paritition ####
 library(cluster)
 names(k3)
-clusplot(df_cat, k3$cluster, color=TRUE, shade=TRUE,
+clusplot(df_num, k3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
 
-c3<-clara(df_cat,3)
+c3<-clara(df_num,3)
 names(c3)
 
-clusplot(df_cat, c3$cluster, color=TRUE, shade=TRUE,
+clusplot(df_num, c3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
 ```
 
-The clusters formed with 'kmeans' are much clearer and well defined but there is still a mass of uncertain observations. Those fall between group 2 and 3, specifically around -3 in component 1 and 2 in component 2.
+The clusters formed with 'clara' are much clearer and well defined but there is still a mass of uncertain observations, around the values between 0 and 2 for component 1 and between -2 and 0 for component 2, that are mixed between two clusters.
 
 ```{r}
 #### Clustering with Discriminant Projection Method #####
@@ -251,7 +250,7 @@ The clusters formed with 'kmeans' are much clearer and well defined but there is
 library(fpc)
 
 plotcluster
-plotcluster(df_cat[,-10], as.integer(k3$cluster))
-plotcluster(df_cat[,-10],as.integer(c3$cluster))
+plotcluster(df_num[,-10], as.integer(k3$cluster))
+plotcluster(df_num[,-10],as.integer(c3$cluster))
 ```
-With discriminant projection method, the 'clara' clustering improves a lot. There's three clearly differentiated clusters and only 2 or 3 samples are out of place.
+This method appears to give a much clearer formation of clusters since the interaction between them isn't as significant as with previous methods. 
