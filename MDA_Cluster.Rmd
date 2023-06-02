@@ -20,37 +20,45 @@ library(ggplot2)
 
 # Exploratory data analysis
 
+The given dataset consists of measurements of various chemical properties of glass samples, along with their corresponding types. The dataset contains 10 features and 214 instances.
+
+Each row in the dataset corresponds to a specific glass sample and provides the measurements of the aforementioned features, as well as the type of glass it belongs to.
+
 ```{r}
-df <- read.csv2("glass.csv", header=TRUE, sep=",")
-head(df)
+glass <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(glass)
 ```
 
 ```{r}
 # Transform features into numeric
-features <- names(df)[names(df) != "Type"]
-df[features] <- lapply(df[features], as.numeric)
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
 
 # Transform label as categorical
-df$Type <- as.factor(df$Type)
+glass$Type <- as.factor(glass$Type)
+```
+
+The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six diffrenet levels (for a more detailed explanation of each level see the appendix).
+
+```{r}
+unique(glass$Type)
 ```
 
 ```{r}
-unique(df$Type)
-```
-
-```{r}
-bar_plot <- plot_ly(data = df, x = ~Type,
+bar_plot <- plot_ly(data = glass, x = ~Type,
                     color = ~Type, colors = "YlGnBu") %>%
   add_histogram() %>%
-  layout(title = "Count of Types in df Dataset",
+  layout(title = "Count of Types in glass Dataset",
          xaxis = list(title = "Type"), yaxis = list(title = "Count"))
 
 bar_plot
 ```
 
+The dataset is pretty unbalanced. The instances of **types** 1 and 2 constitute more than $67%$ of the glass types.
+
 ```{r}
 # Compute correlation matrix
-corr_matrix <- cor(df[, 1:9])
+corr_matrix <- cor(glass[, 1:9])
 
 # Create a heatmap using Plotly
 heatmap <- plot_ly(
@@ -73,47 +81,34 @@ heatmap
 ```
 
 ```{r}
-histogram_plots(df, ncol(df))
+histogram_plots(glass[, -c(10)])
 ```
 
 Ba and Fe are not very common elements.
 
 ```{r}
-box_plots(df, ncol(df))
+box_plots(glass[, -c(10)])
 ```
-
 
 # Preprocesing
 
 ## Data transformation
 
+As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
+
 ```{r}
 # Transform features into numeric
-features <- names(df)[names(df) != "Type"]
-df[features] <- lapply(df[features], as.numeric)
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
 
 # Transform label as categorical
-df$Type <- as.factor(df$Type)
+glass$Type <- as.factor(glass$Type)
 ```
-
-As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the df instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
-
-```{r}
-df_num <- df
-# Categorize variable 'Ba'
-df$Ba <- ifelse(df$Ba != 0.0, 1, 0)
-
-# Categorize variable 'Fe'
-df$Fe <- ifelse(df$Fe != 0.0, 1, 0)
-
-df_cat <- df
-```
-
 
 ## Missing values
 
 ```{r}
-sum(is.na(df))
+sum(is.na(glass))
 ```
 
 ## Duplicated values
@@ -121,17 +116,47 @@ sum(is.na(df))
 The row number 40 is a duplicate of the previous row.
 
 ```{r}
-anyDuplicated(df)
-df <- df[!duplicated(df),]
+anyDuplicated(glass)
+glass <- glass[!duplicated(glass),]
 ```
 
-## Clusters
+```{r}
+df_cat <- glass
+# Categorize variable 'Ba'
+df_cat$Ba <- ifelse(glass$Ba != 0.0, 1, 0)
+df_cat$Ba <- as.factor(df_cat$Ba)
+
+# Categorize variable 'Fe'
+df_cat$Fe <- ifelse(glass$Fe != 0.0, 1, 0)
+df_cat$Fe <- as.factor(df_cat$Fe)
+
+df_cat$Type <- as.factor(df_cat$Type)
+```
+
+
+# Clusters
+
+```{r}
+df_num <- df_cat[, sapply(df_cat, is.numeric)]
+```
+
 
 ```{r}
 d <- dist(df_num, method = "euclidean") # distance matrix
-fit <- hclust(d, method="single") 
+fit <- hclust(d, method="single")
 plot(fit,main="Dendrogram of Single Linkage") # Dendogram
 ```
+
+```{r}
+dim(d)
+# d <- dist(df_cat, method = "manhattan") # distance matrixs
+```
+
+```{r}
+head(df_num)
+```
+
+
 
 ```{r}
 fit1 <- hclust(d, method="complete") 
@@ -179,7 +204,7 @@ Vemos que la opción más razonable parece ser la de 3 grupos, ya que las de 4 y
 
 ```{r}
 aux<-c()
-for (i in 2:6) {
+for (i in 1:dim(df_num)[2]) {
   k<-kmeans(df_num,centers=i,nstart=25)
   aux[i]<-k$tot.withinss
 }
