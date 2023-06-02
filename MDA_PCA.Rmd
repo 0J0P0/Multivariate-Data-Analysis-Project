@@ -150,30 +150,34 @@ df_cat$Type <- as.factor(df_cat$Type)
 We will apply PCA to the features of the dataset, using the Type variable as supplementary variable
 
 ```{r}
-library(FactoMineR)
-
-# Assuming your dataset is named "glass"
-# Remove the "Type" column from the dataset
-numerical_data <- glass[, !names(glass) %in% "Type"]
-
-# Extract the "Type" column as supplementary variable
-supplementary_var <- glass$Type
-
-# Apply PCA to the numerical data, specifying the supplementary variable
-pca <- PCA(numerical_data, scale = TRUE, quali.sup = supplementary_var)
-
-# Access the results of PCA
-summary(pca)      # Summary statistics of the PCA
-eig <- get_eigenvalue(pca)     # Eigenvalues
-var <- get_pca_var(pca)        # Variables' contributions to dimensions
-
-# Plotting the results (example plot)
-plot.PCA(pca, axes = c(1, 2), habillage = glass$Type)
-
+dim(numerical_data)
+dim( glass[, names(glass) %in% "Type"])
 ```
 
 
+```{r}
+library(FactoMineR)
+pca <- PCA(glass, scale = TRUE, quali.sup = 10, graph=F)
+```
 
+### Component extraction
+
+```{r}
+pca$eig
+mean(pca$eig[,1])
+```
+Since the data is scaled, the mean eigenvalue is 1. Therefore, we will extract the first 4 principal components since they are the only components to have an eigenvalue above 1.
+
+### Correlation between dimension
+
+```{r}
+pca$var$cor
+```
+
+### correlations between dimensions
+```{r}
+plot.PCA(pca, axes=c(1,2), choix="var")
+```
 
 
 
