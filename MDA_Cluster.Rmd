@@ -16,6 +16,8 @@ source("plots.R")
 library(dplyr)
 library(plotly)
 library(ggplot2)
+library(factoextra)
+library(ggpubr)
 ```
 
 # Exploratory data analysis
@@ -38,7 +40,7 @@ glass[features] <- lapply(glass[features], as.numeric)
 glass$Type <- as.factor(glass$Type)
 ```
 
-The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six diffrenet levels (for a more detailed explanation of each level see the appendix).
+The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six different levels (for a more detailed explanation of each level see the appendix).
 
 ```{r}
 unique(glass$Type)
@@ -137,54 +139,35 @@ df_cat$Type <- as.factor(df_cat$Type)
 # Clusters
 
 ```{r}
-df_num <- df_cat[, sapply(df_cat, is.numeric)]
+df_num  <- subset(df_cat, select = -c(Ba, Fe, Type))
+summary(df_num)
+var(df_num$RI)
 ```
-
+Since all variables that we are gonna use for clustering, except for RI(Reflextive Index), have the same units it is not advisable to scale them because that may hide some variance and inner groups. Moreover, reflective Index has a really low variance so it is probably not important to make clusters.
 
 ```{r}
 d <- dist(df_num, method = "euclidean") # distance matrix
 fit <- hclust(d, method="single")
-plot(fit,main="Dendrogram of Single Linkage") # Dendogram
-```
-
-```{r}
-dim(d)
-# d <- dist(df_cat, method = "manhattan") # distance matrixs
-```
-
-```{r}
-head(df_num)
-```
-
-
-
-```{r}
+plot(fit,main="Dendrogram of Single Linkage", labels = FALSE) 
 fit1 <- hclust(d, method="complete") 
-plot(fit1,main="Dendrogram of complete Linkage") # Dendogram
-```
-
-```{r}
+plot(fit1,main="Dendrogram of complete Linkage", labels = FALSE) 
 fit2 <- hclust(d, method="average") 
-plot(fit2,main="Dendrogram of Average Linkage") # Dendogram 
-```
-
-```{r}
+plot(fit2,main="Dendrogram of Average Linkage", labels = FALSE)
 fit3 <- hclust(d, method="ward.D2") 
-plot(fit3,main="Dendrogram of Ward Method") # Dendogram 
-```
-Con el método Ward se observan claramente dos grupos, en caso de que consideremos altura 30. También se pueden considerar 3 grupos si usamos una altura menor. Esta clara diferenciación que no se ha visto con previos métodos se debe a que este método, a diferencia de los previos, es robusto ante la presencia de outliers que, como se ha visto anteriormente, aparecen en cantidades notables en este dataset.
-
-```{r}
+plot(fit3,main="Dendrogram of Ward Method", labels = FALSE) 
 fit4 <- hclust(d, method="centroid") 
-plot(fit4,main="Dendrogram of Centroid Method") # Dendogram 
+plot(fit4,main="Dendrogram of Centroid Method", labels = FALSE) # Dendogram 
 ```
+
+With the Ward method, two distinct groups can be clearly observed when considering a height of 20. Additionally, three groups can be considered if we use a lower height, like 15. This clear differentiation, which was not seen with previous methods, is due to the robustness of this method in the presence of outliers and a lot of samples.
+
 
 ### Highlighting groups
 
-El método Ward es el que nos aporta una mayor claridad sobre los grupos que se pueden formar en el dataset, por tanto lo usaremos como base.
+The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset. Therefore, we will use it as the basis for our analysis.
 
 ```{r}
-plot(fit3,main="Dendrogram Ward Method Linkage")
+plot(fit3,main="Dendrogram Ward Method Linkage", labels=FALSE)
 groups <- cutree(fit3, k=2 )# c
 rect.hclust(fit3, k=2, border="green")
 
@@ -194,11 +177,15 @@ rect.hclust(fit3, k=3, border="blue")
 groups <- cutree(fit3, k=4 )# c
 rect.hclust(fit3, k=4, border="purple")
 
+groups <- cutree(fit3, k=5 )# c
+rect.hclust(fit3, k=5, border="orange")
+
 groups <- cutree(fit3, k=6 )# c
 rect.hclust(fit3, k=6, border="red")
 # Con 5, Alaska se separa a un unico cluster.
 ```
-Vemos que la opción más razonable parece ser la de 3 grupos, ya que las de 4 y 6 incluyen grupos muy reducidos, pero confirmemos esto con el Elbow Graph.
+Looks like the most reasonable option is 3 groups, since adding more groups creates some of them with very few samples, which may be due to the presence of some outliers. Nevertheless, let's confirm this hypothesis with the Elbow Graph.
+
 
 ### Elbow Graph
 
@@ -209,52 +196,52 @@ for (i in 1:dim(df_num)[2]) {
   aux[i]<-k$tot.withinss
 }
 plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
-```
-Observamos que el número óptimo de clústers es 3, tal y como habíamos teorizado,  pues en este se registra el cambio de pendiente más significativo. También hay otro cambio de pendiente con 4 grupos, pero este no parece ser tan importante, además en el dendrograma previo hemos podido observar que al hacer 4 grupos aparece uno con muy pocas muestras, cosa que no aporta gran claridad, y el resto son muy parecidos a los de 3 grupos.
 
+fviz_nbclust(df_num, kmeans, method = "silhouette")
+fviz_nbclust(df_num, kmeans, method = "gap_stat")
+```
+As wee can see, with different criteria: "wss", silhouette" and "gap_stat", the result seems to be the same, the optimal number of clusters is 3 as we theorized previously. 
 ```{r}
 k3 <- kmeans(d, centers = 3, nstart = 25)
 str(k3)
 names(k3)
 
 aggregate(df_num,by=list(k3$cluster),FUN=mean)
-# Con k=3 se explican mejor los clusters
 df_num$cluster<-as.numeric(k3$cluster)
 ```
-It can be observed that the third group has a much higher value in _Mg_ and a much lower value in _Ba_ than the other two groups. Meanwhile, the first group has significantly higher values in _Al_, _K_ and _Ba_ but a significantly lower value in _Mg_. Finally, the second group does not outstand neither for lower nor for higher values, beign _K_ and _Fe_ exceptions where group two has the lowest values, although the difference is not so significant for _Fe_.
-
+We observe that variables like _RI_, _Na_, _Al_ and _Si_ don't play an important role for differentiating the groups. On the other hand, variables such as _Mg_ outstand with a practically null value in group 1, a  moderate value in group 2, and a big value in comparion in group 3, being a variable that seems to be important for the clustering of the groups. Another variable important to separate groups might be _K_, which seems to sepparate group 1 from the other two. Something similar happens with _Ca_, which has a pretty high value for group 1 and similar values for groups 2 and 3.
 ```{r}
-### Sum of Squares ####
 k3$withinss
-# SS en cada cluster
 k3$totss
 k3$tot.withinss
-# Suma de k4$withinss
-k3$betweenss + k3$tot.withinss # BSS + Wssq
+k3$betweenss + k3$tot.withinss # BSS + Wss
 ```
+
 ### Silhouette Index
 
 ```{r}
-#### Silhoutte Index ######
 library(cluster)
 library(HSAUR)
 library(kmed)
 
-res <- fastkmed(d, 3)
+res <- fastkmed(d, 6)
 silhouette <- sil(d, res$medoid, res$cluster)
 #silhouette$result
 silhouette$plot
 ```
+Silhouette index confirms that the most addequate number of clusters is 3.
+### Cluster Plots
 ```{r}
-############ Group Means ##################
-aggregate(df_num[,-11],by=list(res$cluster),FUN=mean)
-
-## Comparison of Results of kmeans and kmedians
-aggregate(df_num,by=list(k3$cluster),FUN=mean)
+fviz_cluster(k3, data = df_num,
+             palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
 ```
 
 ```{r}
-## Classification of observations based on paritition ####
+## Classification of observations based on partition ####
 library(cluster)
 names(k3)
 clusplot(df_num, k3$cluster, color=TRUE, shade=TRUE,
@@ -267,7 +254,16 @@ clusplot(df_num, c3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
 ```
 
-The clusters formed with 'clara' are much clearer and well defined but there is still a mass of uncertain observations, around the values between 0 and 2 for component 1 and between -2 and 0 for component 2, that are mixed between two clusters.
+```{r}
+fviz_cluster(k3, data = df_num,
+             palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
+
+The clusters formed with kmeans seem to sepparate more properly the samples than the ones generated with 'clara' method. 
 
 ```{r}
 #### Clustering with Discriminant Projection Method #####
@@ -278,4 +274,3 @@ plotcluster
 plotcluster(df_num[,-10], as.integer(k3$cluster))
 plotcluster(df_num[,-10],as.integer(c3$cluster))
 ```
-This method appears to give a much clearer formation of clusters since the interaction between them isn't as significant as with previous methods. 
