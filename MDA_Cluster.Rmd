@@ -229,6 +229,7 @@ p <- ggplot(data = df_num, aes(x = cluster, fill = glass$Type)) +
 print(p)
 ```
 Keep in mind this distribution of types of glass around clusters because we will see that hclust cut in 3 groups coincides with kmeans for 3 groups.
+
 ## Kmeans
 ```{r}
 k3 <- kmeans(d, centers = 3, nstart = 25)
