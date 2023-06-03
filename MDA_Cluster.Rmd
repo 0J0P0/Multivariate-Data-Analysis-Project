@@ -31,6 +31,7 @@ glass <- read.csv2("glass.csv", header=TRUE, sep=",")
 head(glass)
 ```
 
+
 ```{r}
 # Transform features into numeric
 features <- names(glass)[names(glass) != "Type"]
@@ -121,7 +122,7 @@ The row number 40 is a duplicate of the previous row.
 anyDuplicated(glass)
 glass <- glass[!duplicated(glass),]
 ```
-
+## Binarization of Fe and Ba
 ```{r}
 df_cat <- glass
 # Categorize variable 'Ba'
@@ -143,7 +144,7 @@ df_num  <- subset(df_cat, select = -c(Ba, Fe, Type))
 summary(df_num)
 var(df_num$RI)
 ```
-Since all variables that we are gonna use for clustering, except for RI(Reflextive Index), have the same units it is not advisable to scale them because that may hide some variance and inner groups. Moreover, reflective Index has a really low variance so it is probably not important to make clusters.
+Since all variables that we are gonna use for clustering, except for RI(Reflextive Index), have the same units it is not advisable to scale them because that may hide some variance and inner groups. Moreover, reflective Index has a really low variance so it is probably not very important to make clusters.
 
 ```{r}
 d <- dist(df_num, method = "euclidean") # distance matrix
@@ -159,12 +160,12 @@ fit4 <- hclust(d, method="centroid")
 plot(fit4,main="Dendrogram of Centroid Method", labels = FALSE) # Dendogram 
 ```
 
-With the Ward method, two distinct groups can be clearly observed when considering a height of 20. Additionally, three groups can be considered if we use a lower height, like 15. This clear differentiation, which was not seen with previous methods, is due to the robustness of this method in the presence of outliers and a lot of samples.
+Ward method seems to give the most reasonable clustering of the dataset. With this method, two distinct groups can be clearly observed when considering a height of 20. Additionally, three groups can be considered if we use a lower height, like 15. This clear differentiation, which was not seen with previous methods, is due to the robustness of this method in the presence of outliers and a lot of samples.
 
 
 ### Highlighting groups
 
-The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset. Therefore, we will use it as the basis for our analysis.
+The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset. Therefore, we will use it as the basis for our analysis in hierarchical clustering.
 
 ```{r}
 plot(fit3,main="Dendrogram Ward Method Linkage", labels=FALSE)
@@ -200,22 +201,8 @@ plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. numbe
 fviz_nbclust(df_num, kmeans, method = "silhouette")
 fviz_nbclust(df_num, kmeans, method = "gap_stat")
 ```
-As wee can see, with different criteria: "wss", silhouette" and "gap_stat", the result seems to be the same, the optimal number of clusters is 3 as we theorized previously. 
-```{r}
-k3 <- kmeans(d, centers = 3, nstart = 25)
-str(k3)
-names(k3)
+As wee can see, with different criteria: "wss", "silhouette" and "gap_stat", the result seems to be the same, the optimal number of clusters is 3 as we theorized previously. 
 
-aggregate(df_num,by=list(k3$cluster),FUN=mean)
-df_num$cluster<-as.numeric(k3$cluster)
-```
-We observe that variables like _RI_, _Na_, _Al_ and _Si_ don't play an important role for differentiating the groups. On the other hand, variables such as _Mg_ outstand with a practically null value in group 1, a  moderate value in group 2, and a big value in comparion in group 3, being a variable that seems to be important for the clustering of the groups. Another variable important to separate groups might be _K_, which seems to sepparate group 1 from the other two. Something similar happens with _Ca_, which has a pretty high value for group 1 and similar values for groups 2 and 3.
-```{r}
-k3$withinss
-k3$totss
-k3$tot.withinss
-k3$betweenss + k3$tot.withinss # BSS + Wss
-```
 
 ### Silhouette Index
 
@@ -230,7 +217,37 @@ silhouette <- sil(d, res$medoid, res$cluster)
 silhouette$plot
 ```
 Silhouette index confirms that the most addequate number of clusters is 3.
-### Cluster Plots
+
+```{r}
+cluster = cutree(fit3,3)
+# Create a bar plot of Type vs. Cluster
+p <- ggplot(data = df_num, aes(x = cluster, fill = glass$Type)) +
+  geom_bar() +
+  theme_bw()
+
+# Display the plot
+print(p)
+```
+Keep in mind this distribution of types of glass around clusters because we will see that hclust cut in 3 groups coincides with kmeans for 3 groups.
+## Kmeans
+```{r}
+k3 <- kmeans(d, centers = 3, nstart = 25)
+str(k3)
+names(k3)
+
+aggregate(df_num,by=list(k3$cluster),FUN=mean)
+df_num$cluster<-as.numeric(k3$cluster)
+```
+
+We observe that variables like _RI_, _Na_, _Al_ and _Si_ don't play an important role for differentiating the groups. On the other hand, variables such as _Mg_ outstand with a practically null value in group 1, a  moderate value in group 2, and a big value in comparion in group 3, being a variable that seems to be important for the clustering of the groups. Another variable important to separate groups might be _K_, which seems to sepparate group 1 from the other two. Something similar happens with _Ca_, which has a pretty high value for group 1 and similar values for groups 2 and 3.
+
+```{r}
+k3$withinss
+k3$totss
+k3$tot.withinss
+k3$betweenss + k3$tot.withinss # BSS + Wss
+```
+### Kmeans Plots
 ```{r}
 fviz_cluster(k3, data = df_num,
              palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
@@ -259,18 +276,21 @@ fviz_cluster(k3, data = df_num,
              palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
              geom = "point",
              ellipse.type = "convex", 
-             ggtheme = theme_bw()
+             ggtheme = theme_bw(),
              )
+
 ```
 
-The clusters formed with kmeans seem to sepparate more properly the samples than the ones generated with 'clara' method. 
+The clusters formed with kmeans seem to separate more properly the samples than the ones generated with 'clara' method. 
 
 ```{r}
-#### Clustering with Discriminant Projection Method #####
+# Create a bar plot of Type vs. Cluster
+p <- ggplot(data = df_num, aes(x = k3$cluster, fill = glass$Type)) +
+  geom_bar() +
+  theme_bw()
 
-library(fpc)
-
-plotcluster
-plotcluster(df_num[,-10], as.integer(k3$cluster))
-plotcluster(df_num[,-10],as.integer(c3$cluster))
+# Display the plot
+print(p)
 ```
+Let's see if the clustering separates with clarity some of the different types of glass. Glass type 2, which goes for non-processed building windows, seems to be the most common in all groups, but for instance, group three gathers all of glass type 1 and 3, which are building and vehicle windows but most importantly both processed. Meanwhile group 2 contains most of types 5, 6 and 7, which are the types belonging to containers, tableware and headlamps, which happen to be the types less similar to vehicle or building windows. Cluster 1 seems to be the more diffuse, but we already saw in the cluster plot that is the one with less samples and is has a considerable intersection with group 2, so it makes sense that is the one that gives less information.
+
