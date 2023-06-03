@@ -28,10 +28,6 @@ set.seed(123)
 
 # Exploratory data analysis
 
-The given dataset consists of measurements of various chemical properties of glass samples, along with their corresponding types. The dataset contains 10 features and 214 instances.
-
-Each row in the dataset corresponds to a specific glass sample and provides the measurements of the aforementioned features, as well as the type of glass it belongs to.
-
 ```{r}
 glass <- read.csv2("glass.csv", header=TRUE, sep=",")
 head(glass)
@@ -46,7 +42,9 @@ glass[features] <- lapply(glass[features], as.numeric)
 glass$Type <- as.factor(glass$Type)
 ```
 
-The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six diffrenet levels (for a more detailed explanation of each level see the appendix).
+```{r}
+summary(glass)
+```
 
 ```{r}
 unique(glass$Type)
@@ -62,7 +60,9 @@ bar_plot <- plot_ly(data = glass, x = ~Type,
 bar_plot
 ```
 
-The dataset is pretty unbalanced. The instances of **types** 1 and 2 constitute more than $67%$ of the glass types.
+```{r}
+(sum(glass$Type == 2) + sum(glass$Type == 1))/214
+```
 
 ```{r}
 # Compute correlation matrix
@@ -105,12 +105,12 @@ box_plots(glass[, -c(10)])
 As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
 
 ```{r}
-# Transform features into numeric
-features <- names(glass)[names(glass) != "Type"]
-glass[features] <- lapply(glass[features], as.numeric)
-
-# Transform label as categorical
-glass$Type <- as.factor(glass$Type)
+# # Transform features into numeric
+# features <- names(glass)[names(glass) != "Type"]
+# glass[features] <- lapply(glass[features], as.numeric)
+# 
+# # Transform label as categorical
+# glass$Type <- as.factor(glass$Type)
 ```
 
 ## Missing values
@@ -141,41 +141,13 @@ df_cat$Fe <- as.factor(df_cat$Fe)
 df_cat$Type <- as.factor(df_cat$Type)
 ```
 
-# Discriminant Analysis
-
-In order to perform DA, normality and homodestacity assumptions have to be validated for predictor variables (features) are said to be normally distributed and with equal covariance matrices within each class.
-
-## Normality assumptions
-
-```{r}
-histogram_plots(df_cat[, -c(8, 9, 10)])
-box_plots(df_cat[, -c(8, 9, 10)])
-```
-
-The histograms and boxplots seem to approve normality for all the features except **RI**, **Mg** and **K**. The QQ-plots shown below could also confirm this assumption, although, the presence of outliers is quite notorious and may have to be checked as commented further on.
-
-The **Mg** variable presents a lot samples with zero values, which disturbs the distribution from normality. There are two bars with a high frequency of samples, which can also be noted in the QQ-plot, which makes it differ from the normality line.
-
-Regarding the **K** feature, most of the samples have values in the lower range of the histogram, but there are some observations which lie an abnormal distance from the range of most frequent values, which causes the histogram to differ from the normality assumption as well as in the previous cases. Notice that the observations lie almost perfectly over the normality line for the theoretical quantiles, but the two-three samples at the top disrupt the whole normality structure.
-
-For the rest of variables, even though the histograms and boxplots could be interpreted as approximately normal, the presence of outliers is notorious.
-
-```{r}
-qq_plots(df_cat[,-c(8, 9, 10)])
-```
-
-For that reason, an outlier treatment will be conducted with the intent of validating the normality assumption for all the features in the dataset.
-
-```{r}
-# for (i in 2:6){
-#   print(colnames(df_cat)[i])
-#   print(shapiro.test(df_cat[,i])$p.value)
-# }
-```
-
-### Aditional outlier treatment
+## Aditional outlier treatment
 
 The detection of outliers was done with the IQR method. For the lower and upper bound of non-outliers point, the value $1.5$ is used as a multiplier to determine the threshold for identifying outliers.
+
+```{r}
+head(df_cat)
+```
 
 ```{r}
 num_features <- select_if(df_cat, is.numeric)
@@ -185,14 +157,16 @@ outliers <- lapply(num_features, function(feature) {
   q1 <- quantile(feature, 0.25)
   q3 <- quantile(feature, 0.75)
   iqr <- q3 - q1
-  lower_bound <- q1 - 1.5 * iqr 
-  upper_bound <- q3 + 1.5 * iqr
+  lower_bound <- q1 - 3 * iqr 
+  upper_bound <- q3 + 3 * iqr
   outlier_rows <- which(feature < lower_bound | feature > upper_bound)
   outlier_rows
 })
 
 # Combine the outlier indexes
 outlier_indexes <- unique(unlist(outliers))
+
+length(outlier_indexes)
 
 # Drop the outlier rows from the "glass" dataframe
 df_cat_clean <- df_cat[-outlier_indexes,]
@@ -202,22 +176,37 @@ Take into account that the outlier treatment can produce a loss of information, 
 
 Another point to consider is the lack of knowledge in the related field. Although a profound investigation about the glass types and influence of the chemical elements composition was done, we recognize not to be experts in the domain field and this could have a negative effect in the removal of outliers.
 
+
+# Discriminant Analysis
+
+## Normality assumptions
+
+```{r}
+histogram_plots(df_cat[, -c(8, 9, 10)])
+box_plots(df_cat[, -c(8, 9, 10)])
+```
+
+```{r}
+qq_plots(df_cat[,-c(8, 9, 10)])
+```
+
+```{r}
+# for (i in 2:6){
+#   print(colnames(df_cat)[i])
+#   print(shapiro.test(df_cat[,i])$p.value)
+# }
+```
+
 ```{r}
 histogram_plots(df_cat_clean[, -c(8, 9, 10)])
 box_plots(df_cat_clean[, -c(8, 9, 10)])
 ```
-
-After the outlier treatment the results of the graphs show a considerate improvement. By looking at the histograms and boxplots the assumption of normality could be validated. 
-
-Nevertheless, from the QQplots the normality hypothesis does not satisfies for all the features. 
 
 ```{r}
 qq_plots(df_cat_clean[,-c(8,9,10)])
 ```
 
 ## Homocedasticity assumption
-
-As expected, the class-conditional densities does not share equal covariance matrix. Since this assumption can't neither be satisfied, the  performance and reliability of the LDA classifier can be affected. 
 
 ```{r}
 boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
@@ -244,16 +233,10 @@ train_step <- stepclass(train[,1:7],train[,10],
 train_step$formula
 ```
 
-The model is adjusted with all the numerical features from the dataset.
-
 ```{r}
 mod_lda <- lda(Type~RI+Na+Mg+Al+Si+K+Ca, data=train)
 mod_lda
 ```
-
-<!-- - comment on the group means and the coeff -->
-
-The first linear discriminant accounts for the most proportion of the total variance explained.
 
 ```{r}
 YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
@@ -264,28 +247,20 @@ partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
 
 ### Test prediction
 
-In order to evaluate the previous model, the prediction of the test set was done.
-
 ```{r}
 test_pred <- predict(mod_lda, test)
 test_pred$class == test$Type
 ```
 
-As commented beforehand, LD1 contains the highest proportion of variation and it is in fact the only linear discriminant that distinguishes significantly the different groups of types of glass. 
-
 ```{r}
 ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
        aes(x=LD1, y=LD2, col=as.factor(Type))) + geom_point(size=3) +
-  scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+  scale_color_brewer(palette = 'YlGnBu') + labs(title="Projection onto LD1 and LD2", col = "Type") + theme_minimal())
 
 # ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
 #        aes(x=LD3, y=LD4, col=as.factor(Type))) + geom_point(size=3) +
 #   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
 ```
-
-From LD2 no distinctions of the glass type can be made. LD1 does a better job by separating the headlamp glasses (7) from the rest of observations in the left section of the axis with values smaller than $-2.5$. The rest of categories have a less visible separation. Nonetheless, type 5 and 6 could be identified within the origin of the axis and $-2.5$, with some classifications errors. Due to the scarcity of some category levels as in the case of type 6, the previous statement could be inaccurate.
-
-The rest of the glass types are located in the positive values of the linear discriminant 1, which makes the class separation almost not doable. One could argue that type 3 corresponds to the higher values of LD1, but once again due to the few number of samples no robust affirmation can be made.
 
 ```{r}
 tab <- table(test$Type, test_pred$class)
@@ -298,38 +273,30 @@ classrate <- sum(diag(tab))/sum(tab)
 classrate*100
 ```
 
-The accuracy is significantly low as anticipated since the prior assumptions failed in the validation process. Thus the LDA performance does not differentiates effectively between glass types. 
-
 ```{r}
 # Prediction Accuracy
 PA <- mod_lda$prior[1]^2 + mod_lda$prior[2]^2 + mod_lda$prior[3]^2 + 
   mod_lda$prior[4]^2 + mod_lda$prior[5]^2 + mod_lda$prior[6]^2
-PA
+PA; 1/6
 ```
 
-<!-- This calculation accounts for the probability of correctly predicting each class, assuming that the prior probabilities are accurate estimates of the true class proportions. -->
-
 ```{r}
-ny <- sum(diag(tab))
-n <- nrow(test)
-k <- 6
-Qlda <- ((n-ny*k)^2)/(n*(k-1))
-Qlda
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
 ```
 
 ## QDA
 
-In order to improve the accuracy and considering that the covariance matrix of each feature is not equal, the quadratic discriminant analysis was proposed and studied.
-
-However, the train dataset had not enough samples for classes 5, 6 and 7 due to the scarcity of the initial dataset. This fact wouldn't let a QDA model to be adjusted because the covariance matrix for those features with low samples is going to be singular or nearly singular, meaning it is not invertible or poorly conditioned.
-
-The solution to that problem became to join those three categories in a single one called "others". This was done knowing that the categories are nominal and don't have an inherent order or ranking.
-
 ```{r}
+# table(train$Type)
+
 train.qda <- train
 
 train.qda$Type <- as.character(train.qda$Type)  # Convert the Type column to character
-train.qda$Type[train.qda$Type %in% c(5, 6, 7)] <- "others"
+train.qda$Type[train.qda$Type %in% c(5, 6)] <- "others"
 train.qda$Type <- as.factor(train.qda$Type)  # Convert the Type column back to factor
 
 table(train.qda$Type)
@@ -337,7 +304,7 @@ table(train.qda$Type)
 test.qda <- test
 
 test.qda$Type <- as.character(test.qda$Type)  # Convert the Type column to character
-test.qda$Type[test.qda$Type %in% c(5, 6, 7)] <- "others"
+test.qda$Type[test.qda$Type %in% c(5, 6)] <- "others"
 test.qda$Type <- as.factor(test.qda$Type)  # Convert the Type column back to factor
 
 table(test.qda$Type)
@@ -351,12 +318,12 @@ train_step.qda$formula
 
 
 ```{r}
-mod_qda <- qda(Type~RI+Na+Al+Si+K+Ca, data = train.qda)
+mod_qda <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train.qda)
 mod_qda
 ```
 
 ```{r}
-YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#1d91c0", "#081d58")
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#1d91c0", "#225ea8", "#081d58")
 
 partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train.qda ,method="qda",
          nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
@@ -379,20 +346,18 @@ tab <- table(test.qda$Type, test_pred.qda$class)
 tab
 ```
 
-An improvement of the accuracy for the test set was seen, which suggests that the QDA model is better at correctly predicting the class labels of the data points. By modeling the covariance matrices separately for each class, QDA captures the non-linear relationships between features and glass types.
-
 ```{r}
 # Correct Classification Rate (CCR)
 classrate <- sum(diag(tab))/sum(tab)
-classrate
+classrate*100
 ```
 
 ```{r}
-ny <- sum(diag(tab))
-n <- nrow(test)
-k <- 6
-Qlda <- ((n-ny*k)^2)/(n*(k-1))
-Qlda
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
 ```
 
 
@@ -413,43 +378,3 @@ Qlda
 
 
 .
-
-# Feature description
-
-The features in the dataset are as follows:
-
-RI: Refractive Index (continuous) - It represents the ratio of the speed of light in a vacuum to the speed of light in the glass sample. It is a measure of how much the light is bent as it passes through the glass.
-
-Na: Sodium (continuous) - It denotes the amount of sodium (in weight percent) present in the glass.
-
-Mg: Magnesium (continuous) - It represents the amount of magnesium (in weight percent) present in the glass.
-
-Al: Aluminum (continuous) - It signifies the amount of aluminum (in weight percent) present in the glass.
-
-Si: Silicon (continuous) - It denotes the amount of silicon (in weight percent) present in the glass.
-
-K: Potassium (continuous) - It represents the amount of potassium (in weight percent) present in the glass.
-
-Ca: Calcium (continuous) - It signifies the amount of calcium (in weight percent) present in the glass.
-
-Ba: Barium (continuous) - It represents the amount of barium (in weight percent) present in the glass.
-
-Fe: Iron (continuous) - It denotes the amount of iron (in weight percent) present in the glass.
-
-Type: Type of glass (discrete) - It represents the type of glass sample. There are six distinct types ranging from 1 to 7, excluding the 4th one.
-
-## Type varibale description
-
-**Building windows float processed**: This level represents glass used for building windows that has undergone a float processing method. Float processing involves floating molten glass on a bed of molten metal to produce a smooth and flat surface.
-
-**Building windows non float processed**: This level represents glass used for building windows that has not undergone a float processing method. It may have been processed using alternative methods.
-
-**Vehicle windows float processed**: This level represents glass used for vehicle windows that has undergone a float processing method. It is specifically processed for automotive applications.
-
-**Vehicle windows non float processed**: Although not present in this particular database, this level would represent glass used for vehicle windows that has not undergone a float processing method. Similar to the previous category, it may have been processed using alternative methods.
-
-**Containers**: This level represents glass used for containers such as bottles or jars.
-
-**Tableware**: This level represents glass used for tableware items such as plates, bowls, or glasses.
-
-**Headlamps**: This level represents glass used for headlamp lenses in automotive lighting systems.
