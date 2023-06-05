@@ -243,21 +243,25 @@ Ward method seems to give the most reasonable clustering of the dataset. With th
 The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset. Therefore, we will use it as the basis for our analysis in hierarchical clustering.
 
 ```{r}
-plot(fit3,main="Dendrogram Ward Method Linkage", labels=FALSE)
+pdf("plots/dendrogram_ward.pdf", width=8, height=5)
+
+plot(fit3,main="Dendrogram Ward Method Linkage", labels=FALSE, xlab="", sub="")
 groups <- cutree(fit3, k=2 )# c
-rect.hclust(fit3, k=2, border=YlGnBu[2])
+rect.hclust(fit3, k=2, border="red")
 
 groups <- cutree(fit3, k=3 )# c
-rect.hclust(fit3, k=3, border=YlGnBu[4])
+rect.hclust(fit3, k=3, border="blue")
 
 groups <- cutree(fit3, k=4 )# c
-rect.hclust(fit3, k=4, border=YlGnBu[6])
+rect.hclust(fit3, k=4, border="orange")
 
 groups <- cutree(fit3, k=5 )# c
-rect.hclust(fit3, k=5, border=YlGnBu[8])
+rect.hclust(fit3, k=5, border="green")
 
 groups <- cutree(fit3, k=6 )# c
-rect.hclust(fit3, k=6, border=YlGnBu[10])
+rect.hclust(fit3, k=6, border="purple")
+
+dev.off()
 ```
 
 Looks like the most reasonable option is 3 groups, since adding more groups creates some of them with very few samples, which may be due to the presence of some outliers. Nevertheless, let's confirm this hypothesis with the Elbow Graph.
