@@ -1,5 +1,5 @@
 ---
-title: "MDA_PCA"
+title: "MDA_LDA"
 author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
 date: "2023-05-11"
 output: html_document
@@ -211,123 +211,205 @@ df_cat_clean <- df_cat[-outlier_indexes,]
 ```
 
 
-# PCA
+# Discriminant Analysis
 
-In order to properly apply Principal Component Analysis (PCA), our data needs to meet certain assumptions. First, we require our data to follow a normal distribution. We observe that in our case, this assumption is not met for some variables, particularly for Ba and Fe. As mentioned earlier, these variables have a large number of zero values. Furthermore, we need a certain level of correlation among variables. However, the variable Fe does not exhibit significant correlations with the rest of the variables. Therefore, we have decided to exclude the Ba and Fe variables from this analysis.
-
-Additionally, it is essential for our data to be free from outliers. Hence, before applying PCA, we will remove outliers using the Interquartile Range (IQR) method. We used a larger margin in order to avoid removing too many observations.
-
-<!-- Ya hay un tratamiento de outliers en el preprocessing, porque no usas ese? @JOEl? -->
+## Normality assumptions
 
 ```{r}
-df_pca <- df_cat[,-c(8, 9)]
-
-num_features <- select_if(df_pca, is.numeric)
-
-# Detect outliers using the IQR method
-outliers <- lapply(num_features, function(feature) {
-  q1 <- quantile(feature, 0.25)
-  q3 <- quantile(feature, 0.75)
-  iqr <- q3 - q1
-  lower_bound <- q1 - 3 * iqr 
-  upper_bound <- q3 + 3 * iqr
-  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
-  outlier_rows
-})
-
-# Combine the outlier indexes
-outlier_indexes <- unique(unlist(outliers))
-
-length(outlier_indexes)
-
-# Drop the outlier rows from the "glass" dataframe
-df_pca <- df_pca[-outlier_indexes,]
-```
-
-We will apply PCA to the features of the dataset, using the Type variable as supplementary variable and RI as supplementary variable.
-
-```{r}
- pca <- PCA(df_pca, scale = TRUE, quali.sup = 8, quanti.sup = 1, graph=F)
-```
-
-
-## Component extraction
-
-```{r}
-pca$eig
-```
-
-We applied PCA to the cleaned data and for the analysis of the resulting components, we will focus on the first three components. These three components were chosen because they have eigenvalues above the mean. By utilizing the first three components, we are able to explain 85% of the variance in the data.
-
-```{r}
-variance_percent <- pca$eig[,2]
-
-# Calculate the cumulative percentage of variance
-cumulative_var <- cumsum(variance_percent)
-
-data <- data.frame(Components = seq_along(variance_percent),
-                   VariancePercent = variance_percent,
-                   CumulativeVar = cumulative_var)
-
-# Plotting with ggplot2
-p <- ggplot(data, aes(x = Components)) +
-  geom_bar(aes(y = VariancePercent), stat = "identity", fill = YlGnBu[6], width = 0.75) +
-  geom_line(aes(y = CumulativeVar), color = YlGnBu[4], group = 1, lwd = 1) +
-  geom_point(aes(y = CumulativeVar), color = YlGnBu[5], size = 3) +
-  labs(x = "Number of Components", y = "Percentage of Variance",
-       title = "Cumulative Percentage of Variance Explained") +
-  geom_hline(yintercept = mean(variance_percent), linetype = "dashed", color = YlGnBu[9], lwd=1) +
-  ylim(0, 100) +
-  theme_minimal()+
-  scale_x_continuous(breaks = seq_along(variance_percent))
-
-p
-ggsave("plots/var_cumvar.pdf", p, width = 8, height = 5)
-```
-
-Since the data is scaled, the mean eigenvalue is 1. Therefore, we will extract the first 4 principal components since they are the only components to have an eigenvalue above 1.
-
-## Correlation between dimension
-
-```{r}
-pca$var$cor
+histogram_plots(df_cat[, -c(8, 9, 10)])
+box_plots(df_cat[, -c(8, 9, 10)])
 ```
 
 ```{r}
-p1 <- plot.PCA(pca, axes=c(1,2), choix="var")
-p2 <- plot.PCA(pca, axes=c(2,3), choix="var")
-p3 <- plot.PCA(pca, axes=c(1,3), choix="var")
-p1; p2; p3
-
-ggsave("plots/pca_dim12.pdf", p1, width = 5, height = 5)
-ggsave("plots/pca_dim23.pdf", p2, width = 5, height = 5)
-ggsave("plots/pca_dim13.pdf", p3, width = 5, height = 5)
+qq_plots(df_cat[,-c(8, 9, 10)])
 ```
 
-## Individual plots
+```{r}
+# for (i in 2:6){
+#   print(colnames(df_cat)[i])
+#   print(shapiro.test(df_cat[,i])$p.value)
+# }
+```
+
+```{r}
+histogram_plots(df_cat_clean[, -c(8, 9, 10)])
+box_plots(df_cat_clean[, -c(8, 9, 10)])
+```
+
+```{r}
+qq_plots(df_cat_clean[,-c(8,9,10)])
+```
+
+## Homocedasticity assumption
+
+```{r}
+boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
+```
+
+## Train-Test split
+
+```{r}
+# Split the dataset into training and testing sets
+split <- sample.split(df_cat$Type, SplitRatio = 0.7)
+train <- subset(df_cat, split == TRUE)
+test <- subset(df_cat, split == FALSE)
+
+dim(df_cat_clean); dim(train); dim(test)
+```
+
+## LDA
+
+```{r}
+train_step <- stepclass(train[,1:7],train[,10],
+                        method="lda",
+                        direction="backward",
+                        criterion="CR")
+train_step$formula
+```
+
+```{r}
+mod_lda <- lda(Type~RI+Na+Mg+Al+Si+K+Ca, data=train)
+mod_lda
+plot(mod_lda)
+```
 
 ```{r}
 YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
 
-plot_pca <- function(pca, df_pca, dim1, dim2, save = "") {
-  df_temp <- data.frame(pca$ind$coord[, c(dim1, dim2)], df_pca$Type)
-  colnames(df_temp) <- c("x1", "x2", "Type")
-
-  plot <- ggplot(df_temp, aes(x = x1, y = x2, color = Type, shape = Type)) +
-    geom_point(size = 2) +
-    labs(x = paste("Component", dim1), y = paste("Component", dim2), color = "Type") +
-    scale_shape_manual(values = c(0, 1, 2, 15, 16, 17)) +
-    theme_minimal() +
-    scale_color_manual(values = YlGnBu_modified) +
-    guides(color = guide_legend(override.aes = list(shape = c(0, 1, 2, 15, 16, 17))), shape = "none")
-  
-  if (save != "") {
-    ggsave(save, plot,  width = 8, height = 6)
-  }
-  print(plot)
-}
-
-plot_pca(pca, df_pca, 1, 2, save="plots/pca_scatter_ind12.pdf")
-plot_pca(pca, df_pca, 2, 3, save="plots/pca_scatter_ind23.pdf")
-plot_pca(pca, df_pca, 1, 3, save="plots/pca_scatter_ind13.pdf")
+partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
+         nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
 ```
+
+### Test prediction
+
+```{r}
+test_pred <- predict(mod_lda, test)
+test_pred$class == test$Type
+```
+
+```{r}
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD1, y=LD2, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(title="Projection onto LD1 and LD2", col = "Type") + theme_minimal())
+
+# ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD3, y=LD4, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+```
+
+```{r}
+tab <- table(test$Type, test_pred$class)
+tab
+```
+
+```{r}
+# Correct Classification Rate (CCR)
+classrate <- sum(diag(tab))/sum(tab)
+classrate*100
+```
+
+```{r}
+# Prediction Accuracy
+PA <- mod_lda$prior[1]^2 + mod_lda$prior[2]^2 + mod_lda$prior[3]^2 + 
+  mod_lda$prior[4]^2 + mod_lda$prior[5]^2 + mod_lda$prior[6]^2
+PA; 1/6
+```
+
+```{r}
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
+```
+
+## QDA
+
+```{r}
+# table(train$Type)
+
+train.qda <- train
+
+train.qda$Type <- as.character(train.qda$Type)  # Convert the Type column to character
+train.qda$Type[train.qda$Type %in% c(5, 6)] <- "others"
+train.qda$Type <- as.factor(train.qda$Type)  # Convert the Type column back to factor
+
+table(train.qda$Type)
+
+test.qda <- test
+
+test.qda$Type <- as.character(test.qda$Type)  # Convert the Type column to character
+test.qda$Type[test.qda$Type %in% c(5, 6)] <- "others"
+test.qda$Type <- as.factor(test.qda$Type)  # Convert the Type column back to factor
+
+table(test.qda$Type)
+
+```
+
+```{r}
+train_step.qda <- stepclass(train.qda[,1:7],train.qda[,10],method="qda",direction="backward", criterion="CR")
+train_step.qda$formula
+```
+
+
+```{r}
+mod_qda <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train.qda)
+mod_qda
+```
+
+```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#1d91c0", "#225ea8", "#081d58")
+
+partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train.qda ,method="qda",
+         nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
+```
+
+### Test prediction
+
+```{r}
+test_pred.qda <- predict(mod_qda, test.qda)
+test_pred.qda$class == test.qda$Type
+```
+
+```{r}
+test_pred.qda$class
+```
+
+
+```{r}
+tab <- table(test.qda$Type, test_pred.qda$class)
+tab
+```
+
+```{r}
+# Correct Classification Rate (CCR)
+classrate <- sum(diag(tab))/sum(tab)
+classrate*100
+```
+
+```{r}
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.

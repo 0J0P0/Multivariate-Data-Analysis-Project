@@ -1,5 +1,5 @@
 ---
-title: "Multivariate Data Analysis"
+title: "MDA_Cluster"
 author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
 date: "2023-05-11"
 output: html_document
@@ -13,35 +13,46 @@ YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#2
 
 source("plots.R")
 
+library(MASS)
+library(klaR)
+library(kmed)
 library(dplyr)
+library(tidyr)
+library(HSAUR)
+library(httpgd)
 library(plotly)
-library(ggplot2)
-library(factoextra)
 library(ggpubr)
+library(ggplot2)
+library(qqplotr)
+library(caTools)
+library(cluster)
+library(biotools)
+library(gridExtra)
+library(factoextra)
+library(FactoMineR)
+
+
+# Set the seed for reproducibility
+set.seed(123)
 ```
 
 # Exploratory data analysis
-
-The given dataset consists of measurements of various chemical properties of glass samples, along with their corresponding types. The dataset contains 10 features and 214 instances.
-
-Each row in the dataset corresponds to a specific glass sample and provides the measurements of the aforementioned features, as well as the type of glass it belongs to.
 
 ```{r}
 glass <- read.csv2("glass.csv", header=TRUE, sep=",")
 head(glass)
 ```
 
-
 ```{r}
-# Transform features into numeric
 features <- names(glass)[names(glass) != "Type"]
 glass[features] <- lapply(glass[features], as.numeric)
 
-# Transform label as categorical
 glass$Type <- as.factor(glass$Type)
 ```
 
-The **type** variable is evidently categorical. It provides information about the different types of glass present in the database. There are six different levels (for a more detailed explanation of each level see the appendix).
+```{r}
+summary(glass)
+```
 
 ```{r}
 unique(glass$Type)
@@ -57,13 +68,13 @@ bar_plot <- plot_ly(data = glass, x = ~Type,
 bar_plot
 ```
 
-The dataset is pretty unbalanced. The instances of **types** 1 and 2 constitute more than $67%$ of the glass types.
+```{r}
+(sum(glass$Type == 2) + sum(glass$Type == 1))/214
+```
 
 ```{r}
-# Compute correlation matrix
 corr_matrix <- cor(glass[, 1:9])
 
-# Create a heatmap using Plotly
 heatmap <- plot_ly(
   x = colnames(corr_matrix),
   y = colnames(corr_matrix),
@@ -72,7 +83,6 @@ heatmap <- plot_ly(
   colorscale = "YlGnBu"
 )
 
-# Add cell values to the heatmap
 heatmap <- heatmap %>%
   add_annotations(
     x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
@@ -87,25 +97,66 @@ heatmap
 histogram_plots(glass[, -c(10)])
 ```
 
-Ba and Fe are not very common elements.
+```{r}
+glass_tidy <- gather(data.frame(glass[, 2:9]), key = "Variable", value = "Value")
+
+# Create a boxplot using ggplot2
+p <- ggplot(glass_tidy, aes(x = Variable, y = Value, fill = Variable)) +
+  geom_boxplot(color = "black", outlier.shape = NA) +
+  labs(x = "Element", y = "Weight (%)") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p
+ggsave("plots/elements_weights.pdf", p, width = 8, height = 6)
+```
 
 ```{r}
 box_plots(glass[, -c(10)])
 ```
 
+```{r}
+glass_subset <- glass[, c(1:9, 10)]
+
+# Get the list of column names
+cols <- names(glass_subset)
+
+# Create a list to store the individual boxplot plots
+boxplot_plots <- list()
+
+# Iterate over each column and create a boxplot plot
+for (i in 1:9) {
+  boxplot_plot <- ggplot(glass_subset, aes_string(x = "Type", y = cols[i])) +
+    geom_boxplot(fill = YlGnBu[i], color = "black", size=0.1, outlier.size = 0.6) +
+    labs(x = "Type", y = cols[i], title = cols[i]) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(plot.title = element_text(hjust = 0.5, size = 10),  # Center-align the title, adjust font size
+          axis.title.x = element_text(size = 8),  # Adjust x-label font size
+          axis.title.y = element_text(size = 8))
+  
+  boxplot_plots[[i]] <- boxplot_plot
+}
+
+# Arrange the boxplot plots in a grid
+arranged_plots <- grid.arrange(grobs = boxplot_plots, nrow = 3, ncol = 3)
+
+ggsave("plots/feature_boxplots.pdf", arranged_plots, width = 8, height = 8)
+```
+
+
 # Preprocesing
 
 ## Data transformation
 
-As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
-
 ```{r}
-# Transform features into numeric
-features <- names(glass)[names(glass) != "Type"]
-glass[features] <- lapply(glass[features], as.numeric)
-
-# Transform label as categorical
-glass$Type <- as.factor(glass$Type)
+# # Transform features into numeric
+# features <- names(glass)[names(glass) != "Type"]
+# glass[features] <- lapply(glass[features], as.numeric)
+# 
+# # Transform label as categorical
+# glass$Type <- as.factor(glass$Type)
 ```
 
 ## Missing values
@@ -116,13 +167,11 @@ sum(is.na(glass))
 
 ## Duplicated values
 
-The row number 40 is a duplicate of the previous row.
-
 ```{r}
 anyDuplicated(glass)
 glass <- glass[!duplicated(glass),]
 ```
-## Binarization of Fe and Ba
+
 ```{r}
 df_cat <- glass
 # Categorize variable 'Ba'
@@ -136,6 +185,32 @@ df_cat$Fe <- as.factor(df_cat$Fe)
 df_cat$Type <- as.factor(df_cat$Type)
 ```
 
+## Aditional outlier treatment
+
+```{r}
+head(df_cat)
+```
+
+```{r}
+num_features <- select_if(df_cat, is.numeric)
+
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 3 * iqr 
+  upper_bound <- q3 + 3 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+outlier_indexes <- unique(unlist(outliers))
+
+length(outlier_indexes)
+
+df_cat_clean <- df_cat[-outlier_indexes,]
+```
+
 
 # Clusters
 
@@ -144,93 +219,90 @@ df_num  <- subset(df_cat, select = -c(Ba, Fe, Type))
 summary(df_num)
 var(df_num$RI)
 ```
-Since all variables that we are gonna use for clustering, except for RI(Reflextive Index), have the same units it is not advisable to scale them because that may hide some variance and inner groups. Moreover, reflective Index has a really low variance so it is probably not very important to make clusters.
+
+Since all variables that we are gonna use for clustering, except for RI(Reflective Index), have the same units it is not advisable to scale them because that may hide some variance and inner groups. Moreover, reflective Index has a really low variance so it is probably not very important to make clusters.
 
 ```{r}
 d <- dist(df_num, method = "euclidean") # distance matrix
 fit <- hclust(d, method="single")
-plot(fit,main="Dendrogram of Single Linkage", labels = FALSE) 
+plot(fit, main = "Dendrogram of Single Linkage", labels = FALSE) 
 fit1 <- hclust(d, method="complete") 
-plot(fit1,main="Dendrogram of complete Linkage", labels = FALSE) 
+plot(fit1, main = "Dendrogram of complete Linkage", labels = FALSE) 
 fit2 <- hclust(d, method="average") 
-plot(fit2,main="Dendrogram of Average Linkage", labels = FALSE)
+plot(fit2, main = "Dendrogram of Average Linkage", labels = FALSE)
 fit3 <- hclust(d, method="ward.D2") 
-plot(fit3,main="Dendrogram of Ward Method", labels = FALSE) 
+plot(fit3, main = "Dendrogram of Ward Method", labels = FALSE) 
 fit4 <- hclust(d, method="centroid") 
-plot(fit4,main="Dendrogram of Centroid Method", labels = FALSE) # Dendogram 
+plot(fit4, main = "Dendrogram of Centroid Method", labels = FALSE) # Dendogram 
 ```
 
 Ward method seems to give the most reasonable clustering of the dataset. With this method, two distinct groups can be clearly observed when considering a height of 20. Additionally, three groups can be considered if we use a lower height, like 15. This clear differentiation, which was not seen with previous methods, is due to the robustness of this method in the presence of outliers and a lot of samples.
 
-
-### Highlighting groups
+## Highlighting groups
 
 The Ward method is the one that provides us with the greatest clarity regarding the groups that can be formed in the dataset. Therefore, we will use it as the basis for our analysis in hierarchical clustering.
 
 ```{r}
 plot(fit3,main="Dendrogram Ward Method Linkage", labels=FALSE)
 groups <- cutree(fit3, k=2 )# c
-rect.hclust(fit3, k=2, border="green")
+rect.hclust(fit3, k=2, border=YlGnBu[2])
 
 groups <- cutree(fit3, k=3 )# c
-rect.hclust(fit3, k=3, border="blue")
+rect.hclust(fit3, k=3, border=YlGnBu[4])
 
 groups <- cutree(fit3, k=4 )# c
-rect.hclust(fit3, k=4, border="purple")
+rect.hclust(fit3, k=4, border=YlGnBu[6])
 
 groups <- cutree(fit3, k=5 )# c
-rect.hclust(fit3, k=5, border="orange")
+rect.hclust(fit3, k=5, border=YlGnBu[8])
 
 groups <- cutree(fit3, k=6 )# c
-rect.hclust(fit3, k=6, border="red")
-# Con 5, Alaska se separa a un unico cluster.
+rect.hclust(fit3, k=6, border=YlGnBu[10])
 ```
-Looks like the most reasonable option is 3 groups, since adding more groups creates some of them with very few samples, which may be due to the presence of some outliers. Nevertheless, let's confirm this hypothesis with the Elbow Graph.
 
+Looks like the most reasonable option is 3 groups, since adding more groups creates some of them with very few samples, which may be due to the presence of some outliers. Nevertheless, let's confirm this hypothesis with the Elbow Graph.
 
 ### Elbow Graph
 
 ```{r}
 aux<-c()
 for (i in 1:dim(df_num)[2]) {
-  k<-kmeans(df_num,centers=i,nstart=25)
-  aux[i]<-k$tot.withinss
+  k <- kmeans(df_num, centers = i, nstart = 25)
+  aux[i] <- k$tot.withinss
 }
-plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
+plot(aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters", col=YlGnBu[6], lwd=3)
 
 fviz_nbclust(df_num, kmeans, method = "silhouette")
 fviz_nbclust(df_num, kmeans, method = "gap_stat")
 ```
-As wee can see, with different criteria: "wss", "silhouette" and "gap_stat", the result seems to be the same, the optimal number of clusters is 3 as we theorized previously. 
 
+As wee can see, with different criteria: "wss", "silhouette" and "gap_stat", the result seems to be the same, the optimal number of clusters is 3 as we theorized previously. 
 
 ### Silhouette Index
 
 ```{r}
-library(cluster)
-library(HSAUR)
-library(kmed)
-
 res <- fastkmed(d, 6)
 silhouette <- sil(d, res$medoid, res$cluster)
-#silhouette$result
+
 silhouette$plot
 ```
-Silhouette index confirms that the most addequate number of clusters is 3.
+
+Silhouette index confirms that the most adequate number of clusters is 3.
 
 ```{r}
 cluster = cutree(fit3,3)
-# Create a bar plot of Type vs. Cluster
+
 p <- ggplot(data = df_num, aes(x = cluster, fill = glass$Type)) +
   geom_bar() +
-  theme_bw()
+  theme_bw() + labs(title="", fill = "Type") + scale_fill_brewer(palette = 'YlGnBu')
 
-# Display the plot
-print(p)
+plot(p)
 ```
+
 Keep in mind this distribution of types of glass around clusters because we will see that hclust cut in 3 groups coincides with kmeans for 3 groups.
 
 ## Kmeans
+
 ```{r}
 k3 <- kmeans(d, centers = 3, nstart = 25)
 str(k3)
@@ -240,7 +312,7 @@ aggregate(df_num,by=list(k3$cluster),FUN=mean)
 df_num$cluster<-as.numeric(k3$cluster)
 ```
 
-We observe that variables like _RI_, _Na_, _Al_ and _Si_ don't play an important role for differentiating the groups. On the other hand, variables such as _Mg_ outstand with a practically null value in group 1, a  moderate value in group 2, and a big value in comparion in group 3, being a variable that seems to be important for the clustering of the groups. Another variable important to separate groups might be _K_, which seems to sepparate group 1 from the other two. Something similar happens with _Ca_, which has a pretty high value for group 1 and similar values for groups 2 and 3.
+We observe that variables like _RI_, _Na_, _Al_ and _Si_ don't play an important role for differentiating the groups. On the other hand, variables such as _Mg_ outstand with a practically null value in group 1, a  moderate value in group 2, and a big value in comparison in group 3, being a variable that seems to be important for the clustering of the groups. Another variable important to separate groups might be _K_, which seems to separate group 1 from the other two. Something similar happens with _Ca_, which has a pretty high value for group 1 and similar values for groups 2 and 3.
 
 ```{r}
 k3$withinss
@@ -248,10 +320,12 @@ k3$totss
 k3$tot.withinss
 k3$betweenss + k3$tot.withinss # BSS + Wss
 ```
+
 ### Kmeans Plots
+
 ```{r}
 fviz_cluster(k3, data = df_num,
-             palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+             palette = c(YlGnBu[2], YlGnBu[6], YlGnBu[9]), 
              geom = "point",
              ellipse.type = "convex", 
              ggtheme = theme_bw()
@@ -259,8 +333,6 @@ fviz_cluster(k3, data = df_num,
 ```
 
 ```{r}
-## Classification of observations based on partition ####
-library(cluster)
 names(k3)
 clusplot(df_num, k3$cluster, color=TRUE, shade=TRUE,
          labels=2, lines=0)
@@ -279,19 +351,17 @@ fviz_cluster(k3, data = df_num,
              ellipse.type = "convex", 
              ggtheme = theme_bw(),
              )
-
 ```
 
 The clusters formed with kmeans seem to separate more properly the samples than the ones generated with 'clara' method. 
 
 ```{r}
-# Create a bar plot of Type vs. Cluster
 p <- ggplot(data = df_num, aes(x = k3$cluster, fill = glass$Type)) +
   geom_bar() +
   theme_bw()
 
-# Display the plot
 print(p)
 ```
+
 Let's see if the clustering separates with clarity some of the different types of glass. Glass type 2, which goes for non-processed building windows, seems to be the most common in all groups, but for instance, group three gathers all of glass type 1 and 3, which are building and vehicle windows but most importantly both processed. Meanwhile group 2 contains most of types 5, 6 and 7, which are the types belonging to containers, tableware and headlamps, which happen to be the types less similar to vehicle or building windows. Cluster 1 seems to be the more diffuse, but we already saw in the cluster plot that is the one with less samples and is has a considerable intersection with group 2, so it makes sense that is the one that gives less information.
 
