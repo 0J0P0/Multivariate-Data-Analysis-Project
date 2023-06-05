@@ -239,6 +239,7 @@ In order to properly apply Principal Component Analysis (PCA), our data needs to
 Additionally, it is essential for our data to be free from outliers. Hence, before applying PCA, we will remove outliers using the Interquartile Range (IQR) method. We used a larger margin in order to avoid removing too many observations.
 
 ```{r}
+df <- glass
 df_pca <- df[-c(8, 9)]
 
 num_features <- select_if(df_pca, is.numeric)
@@ -264,7 +265,7 @@ df_pca <- df_pca[-outlier_indexes,]
 ```
 
 
-We will apply PCA to the features of the dataset, using the Type variable as supplementary variable and RI as suplementary variable.
+We will apply PCA to the features of the dataset, using the Type variable as supplementary variable. Since we are seeking relationships between the elements and the type, we will also use the reflexion index variable as a suplementary variable.
 
 ```{r}
  pca <- PCA(df_pca, scale = TRUE, quali.sup = 8, quanti.sup = 1, graph=F)
@@ -309,7 +310,7 @@ Since the data is scaled, the mean eigenvalue is 1. Therefore, we will extract t
 ### Correlation between dimension
 
 ```{r}
-pca$var$cor
+t(pca$var$cor)
 ```
 
 ### correlations between dimensions
@@ -336,7 +337,7 @@ plot_pca <- function(pca, df_pca, dim1, dim2, save = "") {
 
   plot <- ggplot(df_temp, aes(x = x1, y = x2, color = Type, shape = Type)) +
     geom_point(size = 2) +
-    labs(x = paste("Component", dim1), y = paste("Component", dim2), color = "Color") +
+    labs(x = paste("Dimension", dim1), y = paste("Dimension", dim2), color = "Type") +
     scale_shape_manual(values = c(0, 1, 2, 15, 16, 17)) +
     theme_minimal() +
     guides(color = guide_legend(override.aes = list(shape = c(0, 1, 2, 15, 16, 17))), shape = "none")
