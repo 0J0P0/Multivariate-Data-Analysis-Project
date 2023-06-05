@@ -242,6 +242,9 @@ length(outlier_indexes)
 
 # Drop the outlier rows from the "glass" dataframe
 df_pca <- df_pca[-outlier_indexes,]
+
+# df_pca == df_cat_clean[,-c(8,9)]
+# same df
 ```
 
 We will apply PCA to the features of the dataset, using the Type variable as supplementary variable and RI as supplementary variable.
