@@ -205,28 +205,6 @@ The detection of outliers was done with the IQR method. For the lower and upper 
 head(df_cat)
 ```
 
-```{r}
-num_features <- select_if(glass, is.numeric)
-
-# Detect outliers using the IQR method
-outliers <- lapply(num_features, function(feature) {
-  q1 <- quantile(feature, 0.25)
-  q3 <- quantile(feature, 0.75)
-  iqr <- q3 - q1
-  lower_bound <- q1 - 3 * iqr 
-  upper_bound <- q3 + 3 * iqr
-  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
-  outlier_rows
-})
-
-# Combine the outlier indexes
-outlier_indexes <- unique(unlist(outliers))
-
-length(outlier_indexes)
-
-# Drop the outlier rows from the "glass" dataframe
-df_clean <- glass[-outlier_indexes,]
-```
 
 ```{r}
 num_features <- select_if(df_cat, is.numeric)
@@ -257,18 +235,49 @@ Another point to consider is the lack of knowledge in the related field. Althoug
 
 # PCA
 
-We will apply PCA to the features of the dataset, using the Type variable as supplementary variable
+In order to properly apply Principal Component Analysis (PCA), our data needs to meet certain assumptions. First, we require our data to follow a normal distribution. We observe that in our case, this assumption is not met for some variables, particularly for Ba and Fe. As mentioned earlier, these variables have a large number of zero values. Furthermore, we need a certain level of correlation among variables. However, the variable Fe does not exhibit significant correlations with the rest of the variables. Therefore, we have decided to exclude the Ba and Fe variables from this analysis.
+Additionally, it is essential for our data to be free from outliers. Hence, before applying PCA, we will remove outliers using the Interquartile Range (IQR) method. We used a larger margin in order to avoid removing too many observations.
 
 ```{r}
-# pca <- PCA(df_cat_clean, scale = TRUE, quali.sup = 8:10, graph=F)
- pca <- PCA(df_clean, scale = TRUE, quali.sup = 10, graph=F)
+df_pca <- df[-c(8, 9)]
+
+num_features <- select_if(df_pca, is.numeric)
+
+# Detect outliers using the IQR method
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 3 * iqr 
+  upper_bound <- q3 + 3 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+# Combine the outlier indexes
+outlier_indexes <- unique(unlist(outliers))
+
+length(outlier_indexes)
+
+# Drop the outlier rows from the "glass" dataframe
+df_pca <- df_pca[-outlier_indexes,]
 ```
+
+
+We will apply PCA to the features of the dataset, using the Type variable as supplementary variable and RI as suplementary variable.
+
+```{r}
+ pca <- PCA(df_pca, scale = TRUE, quali.sup = 8, quanti.sup = 1, graph=F)
+```
+
 
 ### Component extraction
 
 ```{r}
 pca$eig
 ```
+
+We applied PCA to the cleaned data and for the analysis of the resulting components, we will focus on the first three components. These three components were chosen because they have eigenvalues above the mean. By utilizing the first three components, we are able to explain 85% of the variance in the data.
 
 ```{r}
 variance_percent <- pca$eig[,2]
@@ -281,7 +290,7 @@ data <- data.frame(Components = seq_along(variance_percent),
                    CumulativeVar = cumulative_var)
 
 # Plotting with ggplot2
-ggplot(data, aes(x = Components)) +
+p <- ggplot(data, aes(x = Components)) +
   geom_bar(aes(y = VariancePercent), stat = "identity", fill = "cyan2", width = 0.75) +
   geom_line(aes(y = CumulativeVar), color = "aquamarine3", group = 1) +
   geom_point(aes(y = CumulativeVar), color = "aquamarine4") +
@@ -292,6 +301,8 @@ ggplot(data, aes(x = Components)) +
   theme_minimal()+
   scale_x_continuous(breaks = seq_along(variance_percent))
 
+p
+ggsave("plots/var_cumvar.pdf", p, width = 8, height = 5)
 ```
 Since the data is scaled, the mean eigenvalue is 1. Therefore, we will extract the first 4 principal components since they are the only components to have an eigenvalue above 1.
 
@@ -302,10 +313,32 @@ pca$var$cor
 ```
 
 ### correlations between dimensions
+
+
 ```{r}
-plot.PCA(pca, axes=c(1,2), choix="var")
-plot.PCA(pca, axes=c(2,3), choix="var")
-plot.PCA(pca, axes=c(1,3), choix="var")
+p1 <- plot.PCA(pca, axes=c(1,2), choix="var")
+p2 <- plot.PCA(pca, axes=c(2,3), choix="var")
+p3 <- plot.PCA(pca, axes=c(1,3), choix="var")
+p1
+p2
+p3
+ggsave("plots/pca_dim12.pdf", p1, width = 5, height = 5)
+ggsave("plots/pca_dim23.pdf", p2, width = 5, height = 5)
+ggsave("plots/pca_dim13.pdf", p3, width = 5, height = 5)
+```
+
+### individual plots
+
+```{r}
+# Plot the PCA with individual colors
+plot.PCA(pca, axes = c(1, 2), choix = "ind", autoLab = "auto", label = "quali")
+
+df_temp <- data.frame(pca$ind$coord[,c(1,2)], df_pca$Type)
+
+ggplot(df_temp, aes(x = Dim.1, y = Dim.2, color = df_pca.Type)) +
+  geom_point() +
+  labs(x = "X-axis", y = "Y-axis", color = "Color") +
+  theme_minimal()
 ```
 
 
