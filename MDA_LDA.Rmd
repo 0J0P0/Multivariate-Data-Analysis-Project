@@ -1,0 +1,415 @@
+---
+title: "MDA_LDA"
+author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
+date: "2023-05-11"
+output: html_document
+---
+
+```{r setup, include=F, warnings=F, echo=F}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo=FALSE)
+
+YlGnBu = c("#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58")
+
+source("plots.R")
+
+library(MASS)
+library(klaR)
+library(kmed)
+library(dplyr)
+library(tidyr)
+library(HSAUR)
+library(httpgd)
+library(plotly)
+library(ggpubr)
+library(ggplot2)
+library(qqplotr)
+library(caTools)
+library(cluster)
+library(biotools)
+library(gridExtra)
+library(factoextra)
+library(FactoMineR)
+
+# Set the seed for reproducibility
+set.seed(123)
+```
+
+# Exploratory data analysis
+
+```{r}
+glass <- read.csv2("glass.csv", header=TRUE, sep=",")
+head(glass)
+```
+
+```{r}
+features <- names(glass)[names(glass) != "Type"]
+glass[features] <- lapply(glass[features], as.numeric)
+
+glass$Type <- as.factor(glass$Type)
+```
+
+```{r}
+summary(glass)
+```
+
+```{r}
+unique(glass$Type)
+```
+
+```{r}
+bar_plot <- plot_ly(data = glass, x = ~Type,
+                    color = ~Type, colors = "YlGnBu") %>%
+  add_histogram() %>%
+  layout(title = "Count of Types in glass Dataset",
+         xaxis = list(title = "Type"), yaxis = list(title = "Count"))
+
+bar_plot
+```
+
+```{r}
+(sum(glass$Type == 2) + sum(glass$Type == 1))/214
+```
+
+```{r}
+corr_matrix <- cor(glass[, 1:9])
+
+heatmap <- plot_ly(
+  x = colnames(corr_matrix),
+  y = colnames(corr_matrix),
+  z = corr_matrix,
+  type = "heatmap",
+  colorscale = "YlGnBu"
+)
+
+heatmap <- heatmap %>%
+  add_annotations(
+    x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
+    y = rep(colnames(corr_matrix), length(colnames(corr_matrix))),
+    text = round(corr_matrix, 2),
+    showarrow = FALSE)
+
+heatmap
+```
+
+```{r}
+histogram_plots(glass[, -c(10)])
+```
+
+```{r}
+glass_tidy <- gather(data.frame(glass[, 2:9]), key = "Variable", value = "Value")
+
+# Create a boxplot using ggplot2
+p <- ggplot(glass_tidy, aes(x = Variable, y = Value, fill = Variable)) +
+  geom_boxplot(color = "black", outlier.shape = NA) +
+  labs(x = "Element", y = "Weight (%)") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p
+ggsave("plots/elements_weights.pdf", p, width = 8, height = 6)
+```
+
+```{r}
+box_plots(glass[, -c(10)])
+```
+
+```{r}
+glass_subset <- glass[, c(1:9, 10)]
+
+# Get the list of column names
+cols <- names(glass_subset)
+
+# Create a list to store the individual boxplot plots
+boxplot_plots <- list()
+
+# Iterate over each column and create a boxplot plot
+for (i in 1:9) {
+  boxplot_plot <- ggplot(glass_subset, aes_string(x = "Type", y = cols[i])) +
+    geom_boxplot(fill = YlGnBu[i], color = "black", size=0.1, outlier.size = 0.6) +
+    labs(x = "Type", y = cols[i], title = cols[i]) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(plot.title = element_text(hjust = 0.5, size = 10),  # Center-align the title, adjust font size
+          axis.title.x = element_text(size = 8),  # Adjust x-label font size
+          axis.title.y = element_text(size = 8))
+  
+  boxplot_plots[[i]] <- boxplot_plot
+}
+
+# Arrange the boxplot plots in a grid
+arranged_plots <- grid.arrange(grobs = boxplot_plots, nrow = 3, ncol = 3)
+
+ggsave("plots/feature_boxplots.pdf", arranged_plots, width = 8, height = 8)
+```
+
+
+# Preprocesing
+
+## Data transformation
+
+```{r}
+# # Transform features into numeric
+# features <- names(glass)[names(glass) != "Type"]
+# glass[features] <- lapply(glass[features], as.numeric)
+# 
+# # Transform label as categorical
+# glass$Type <- as.factor(glass$Type)
+```
+
+## Missing values
+
+```{r}
+sum(is.na(glass))
+```
+
+## Duplicated values
+
+```{r}
+anyDuplicated(glass)
+glass <- glass[!duplicated(glass),]
+```
+
+```{r}
+df_cat <- glass
+# Categorize variable 'Ba'
+df_cat$Ba <- ifelse(glass$Ba != 0.0, 1, 0)
+df_cat$Ba <- as.factor(df_cat$Ba)
+
+# Categorize variable 'Fe'
+df_cat$Fe <- ifelse(glass$Fe != 0.0, 1, 0)
+df_cat$Fe <- as.factor(df_cat$Fe)
+
+df_cat$Type <- as.factor(df_cat$Type)
+```
+
+## Aditional outlier treatment
+
+```{r}
+head(df_cat)
+```
+
+```{r}
+num_features <- select_if(df_cat, is.numeric)
+
+outliers <- lapply(num_features, function(feature) {
+  q1 <- quantile(feature, 0.25)
+  q3 <- quantile(feature, 0.75)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 3 * iqr 
+  upper_bound <- q3 + 3 * iqr
+  outlier_rows <- which(feature < lower_bound | feature > upper_bound)
+  outlier_rows
+})
+
+outlier_indexes <- unique(unlist(outliers))
+
+length(outlier_indexes)
+
+df_cat_clean <- df_cat[-outlier_indexes,]
+```
+
+
+# Discriminant Analysis
+
+## Normality assumptions
+
+```{r}
+histogram_plots(df_cat[, -c(8, 9, 10)])
+box_plots(df_cat[, -c(8, 9, 10)])
+```
+
+```{r}
+qq_plots(df_cat[,-c(8, 9, 10)])
+```
+
+```{r}
+# for (i in 2:6){
+#   print(colnames(df_cat)[i])
+#   print(shapiro.test(df_cat[,i])$p.value)
+# }
+```
+
+```{r}
+histogram_plots(df_cat_clean[, -c(8, 9, 10)])
+box_plots(df_cat_clean[, -c(8, 9, 10)])
+```
+
+```{r}
+qq_plots(df_cat_clean[,-c(8,9,10)])
+```
+
+## Homocedasticity assumption
+
+```{r}
+boxM(df_cat_clean[,-c(8,9,10)], df_cat_clean$Type)
+```
+
+## Train-Test split
+
+```{r}
+# Split the dataset into training and testing sets
+split <- sample.split(df_cat$Type, SplitRatio = 0.7)
+train <- subset(df_cat, split == TRUE)
+test <- subset(df_cat, split == FALSE)
+
+dim(df_cat_clean); dim(train); dim(test)
+```
+
+## LDA
+
+```{r}
+train_step <- stepclass(train[,1:7],train[,10],
+                        method="lda",
+                        direction="backward",
+                        criterion="CR")
+train_step$formula
+```
+
+```{r}
+mod_lda <- lda(Type~RI+Na+Mg+Al+Si+K+Ca, data=train)
+mod_lda
+plot(mod_lda)
+```
+
+```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
+
+partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train ,method="lda",
+         nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
+```
+
+### Test prediction
+
+```{r}
+test_pred <- predict(mod_lda, test)
+test_pred$class == test$Type
+```
+
+```{r}
+ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+       aes(x=LD1, y=LD2, col=as.factor(Type))) + geom_point(size=3) +
+  scale_color_brewer(palette = 'YlGnBu') + labs(title="Projection onto LD1 and LD2", col = "Type") + theme_minimal())
+
+# ggplotly(ggplot(test_pred$x %>% as.data.frame() %>% cbind(Type=test$Type),
+#        aes(x=LD3, y=LD4, col=as.factor(Type))) + geom_point(size=3) +
+#   scale_color_brewer(palette = 'YlGnBu') + labs(col = "Type") + theme_minimal())
+```
+
+```{r}
+tab <- table(test$Type, test_pred$class)
+tab
+```
+
+```{r}
+# Correct Classification Rate (CCR)
+classrate <- sum(diag(tab))/sum(tab)
+classrate*100
+```
+
+```{r}
+# Prediction Accuracy
+PA <- mod_lda$prior[1]^2 + mod_lda$prior[2]^2 + mod_lda$prior[3]^2 + 
+  mod_lda$prior[4]^2 + mod_lda$prior[5]^2 + mod_lda$prior[6]^2
+PA; 1/6
+```
+
+```{r}
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
+```
+
+## QDA
+
+```{r}
+# table(train$Type)
+
+train.qda <- train
+
+train.qda$Type <- as.character(train.qda$Type)  # Convert the Type column to character
+train.qda$Type[train.qda$Type %in% c(5, 6)] <- "others"
+train.qda$Type <- as.factor(train.qda$Type)  # Convert the Type column back to factor
+
+table(train.qda$Type)
+
+test.qda <- test
+
+test.qda$Type <- as.character(test.qda$Type)  # Convert the Type column to character
+test.qda$Type[test.qda$Type %in% c(5, 6)] <- "others"
+test.qda$Type <- as.factor(test.qda$Type)  # Convert the Type column back to factor
+
+table(test.qda$Type)
+
+```
+
+```{r}
+train_step.qda <- stepclass(train.qda[,1:7],train.qda[,10],method="qda",direction="backward", criterion="CR")
+train_step.qda$formula
+```
+
+
+```{r}
+mod_qda <- qda(Type~RI+Na+Mg+Al+Si+K+Ca, data = train.qda)
+mod_qda
+```
+
+```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#1d91c0", "#225ea8", "#081d58")
+
+partimat(Type~RI+Na+Mg+Al+Si+K+Ca, data=train.qda ,method="qda",
+         nplots.vert=3, nplots.hor=3, image.colors=YlGnBu_modified)
+```
+
+### Test prediction
+
+```{r}
+test_pred.qda <- predict(mod_qda, test.qda)
+test_pred.qda$class == test.qda$Type
+```
+
+```{r}
+test_pred.qda$class
+```
+
+
+```{r}
+tab <- table(test.qda$Type, test_pred.qda$class)
+tab
+```
+
+```{r}
+# Correct Classification Rate (CCR)
+classrate <- sum(diag(tab))/sum(tab)
+classrate*100
+```
+
+```{r}
+# ny <- sum(diag(tab))
+# n <- nrow(test)
+# k <- 6
+# Qlda <- ((n-ny*k)^2)/(n*(k-1))
+# Qlda
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.

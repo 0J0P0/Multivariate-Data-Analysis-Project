@@ -1,5 +1,5 @@
 ---
-title: "Multivariate Data Analysis"
+title: "MDA_PCA"
 author: "Juan Pablo Zaldivar && Enric Millán && Joel Solé"
 date: "2023-05-11"
 output: html_document
@@ -15,14 +15,21 @@ source("plots.R")
 
 library(MASS)
 library(klaR)
+library(kmed)
 library(dplyr)
+library(tidyr)
+library(HSAUR)
+library(httpgd)
 library(plotly)
+library(ggpubr)
 library(ggplot2)
 library(qqplotr)
 library(caTools)
+library(cluster)
 library(biotools)
-library(FactoMineR)
 library(gridExtra)
+library(factoextra)
+library(FactoMineR)
 
 # Set the seed for reproducibility
 set.seed(123)
@@ -36,11 +43,9 @@ head(glass)
 ```
 
 ```{r}
-# Transform features into numeric
 features <- names(glass)[names(glass) != "Type"]
 glass[features] <- lapply(glass[features], as.numeric)
 
-# Transform label as categorical
 glass$Type <- as.factor(glass$Type)
 ```
 
@@ -67,10 +72,8 @@ bar_plot
 ```
 
 ```{r}
-# Compute correlation matrix
 corr_matrix <- cor(glass[, 1:9])
 
-# Create a heatmap using Plotly
 heatmap <- plot_ly(
   x = colnames(corr_matrix),
   y = colnames(corr_matrix),
@@ -79,7 +82,6 @@ heatmap <- plot_ly(
   colorscale = "YlGnBu"
 )
 
-# Add cell values to the heatmap
 heatmap <- heatmap %>%
   add_annotations(
     x = rep(colnames(corr_matrix), each = length(colnames(corr_matrix))),
@@ -94,17 +96,14 @@ heatmap
 histogram_plots(glass[, -c(10)])
 ```
 
-Ba and Fe are not very common elements.
-
 ```{r}
-library(tidyr)
 glass_tidy <- gather(data.frame(glass[, 2:9]), key = "Variable", value = "Value")
 
 # Create a boxplot using ggplot2
 p <- ggplot(glass_tidy, aes(x = Variable, y = Value, fill = Variable)) +
   geom_boxplot(color = "black", outlier.shape = NA) +
   labs(x = "Element", y = "Weight (%)") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "YlGnBu") +
   theme_minimal() +
   theme(legend.position = "none")
 
@@ -112,13 +111,9 @@ p
 ggsave("plots/elements_weights.pdf", p, width = 8, height = 6)
 ```
 
-
 ```{r}
 box_plots(glass[, -c(10)])
 ```
-It can be observed that silicon is the primary component of the glass, as it is present on average in more than 70% of the composition.
-It is also noteworthy that approximately 90% of the glass composition consists of silicon, sodium, and calcium.
-On the other hand, it can be observed that iron and barium are the elements with the least presence.
 
 ```{r}
 glass_subset <- glass[, c(1:9, 10)]
@@ -132,7 +127,7 @@ boxplot_plots <- list()
 # Iterate over each column and create a boxplot plot
 for (i in 1:9) {
   boxplot_plot <- ggplot(glass_subset, aes_string(x = "Type", y = cols[i])) +
-    geom_boxplot(fill = "#69b3a2", color = "black", size=0.1, outlier.size = 0.6) +
+    geom_boxplot(fill = YlGnBu[i], color = "black", size=0.1, outlier.size = 0.6) +
     labs(x = "Type", y = cols[i], title = cols[i]) +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5)) +
@@ -149,16 +144,10 @@ arranged_plots <- grid.arrange(grobs = boxplot_plots, nrow = 3, ncol = 3)
 ggsave("plots/feature_boxplots.pdf", arranged_plots, width = 8, height = 8)
 ```
 
-The analysis of the graphic reveals several notable observations regarding the composition of the glass samples. First, the refractive index falls within a narrow range, ranging from 1.51 to 1.54, indicating consistent optical properties across the samples.
-Examining the elemental composition, we notice that Type 6 and Type 7 glasses exhibit higher sodium (Na) percentages compared to other types. Conversely, Type 1, Type 2, and Type 3 glasses display elevated magnesium (Mg) percentages. Additionally, Type 5 and Type 7 glasses showcase higher aluminum (Al) percentages. Interestingly, the silicon (Si) percentage remains relatively consistent across all types, suggesting its integral role as a fundamental component of the glass composition.
-Notably, Type 6 glass lacks potassium (K), Barium (Ba) and Iron (Fe) composition entirely. Furthermore, Type 5 and Type 6 glasses exhibit higher calcium (Ca) compositions. Barium (Ba), on the other hand, predominantly appears in Type 7 glasses.
-Lastly, iron (Fe) is mainly found in Type 1, 2, and 3 glasses.
 
 # Preprocesing
 
 ## Data transformation
-
-As seen in the exploratory analysis, the Ba and Fe elements are not very common among all instances. For that reason, we have chosen to binarize those variables, setting them to 1 if the dataframe instance contains Ba and Fe respectively (i.e. the value of the variables is greater than 0) and 0 otherwise.
 
 ```{r}
 # # Transform features into numeric
@@ -176,8 +165,6 @@ sum(is.na(glass))
 ```
 
 ## Duplicated values
-
-The row number 40 is a duplicate of the previous row.
 
 ```{r}
 anyDuplicated(glass)
@@ -199,17 +186,13 @@ df_cat$Type <- as.factor(df_cat$Type)
 
 ## Aditional outlier treatment
 
-The detection of outliers was done with the IQR method. For the lower and upper bound of non-outliers point, the value $1.5$ is used as a multiplier to determine the threshold for identifying outliers.
-
 ```{r}
 head(df_cat)
 ```
 
-
 ```{r}
 num_features <- select_if(df_cat, is.numeric)
 
-# Detect outliers using the IQR method
 outliers <- lapply(num_features, function(feature) {
   q1 <- quantile(feature, 0.25)
   q3 <- quantile(feature, 0.75)
@@ -220,23 +203,21 @@ outliers <- lapply(num_features, function(feature) {
   outlier_rows
 })
 
-# Combine the outlier indexes
 outlier_indexes <- unique(unlist(outliers))
 
 length(outlier_indexes)
 
-# Drop the outlier rows from the "glass" dataframe
 df_cat_clean <- df_cat[-outlier_indexes,]
 ```
 
-Take into account that the outlier treatment can produce a loss of information, for the outlier samples may contain some valuable information with reference to the glass type. This can potentially introduce a bias in the subsequent analysis. 
-
-Another point to consider is the lack of knowledge in the related field. Although a profound investigation about the glass types and influence of the chemical elements composition was done, we recognize not to be experts in the domain field and this could have a negative effect in the removal of outliers.
 
 # PCA
 
 In order to properly apply Principal Component Analysis (PCA), our data needs to meet certain assumptions. First, we require our data to follow a normal distribution. We observe that in our case, this assumption is not met for some variables, particularly for Ba and Fe. As mentioned earlier, these variables have a large number of zero values. Furthermore, we need a certain level of correlation among variables. However, the variable Fe does not exhibit significant correlations with the rest of the variables. Therefore, we have decided to exclude the Ba and Fe variables from this analysis.
+
 Additionally, it is essential for our data to be free from outliers. Hence, before applying PCA, we will remove outliers using the Interquartile Range (IQR) method. We used a larger margin in order to avoid removing too many observations.
+
+<!-- Ya hay un tratamiento de outliers en el preprocessing, porque no usas ese? @JOEl? -->
 
 ```{r}
 df <- glass
@@ -262,6 +243,9 @@ length(outlier_indexes)
 
 # Drop the outlier rows from the "glass" dataframe
 df_pca <- df_pca[-outlier_indexes,]
+
+# df_pca == df_cat_clean[,-c(8,9)]
+# same df
 ```
 
 
@@ -272,7 +256,7 @@ We will apply PCA to the features of the dataset, using the Type variable as sup
 ```
 
 
-### Component extraction
+## Component extraction
 
 ```{r}
 pca$eig
@@ -292,12 +276,12 @@ data <- data.frame(Components = seq_along(variance_percent),
 
 # Plotting with ggplot2
 p <- ggplot(data, aes(x = Components)) +
-  geom_bar(aes(y = VariancePercent), stat = "identity", fill = "cyan2", width = 0.75) +
-  geom_line(aes(y = CumulativeVar), color = "aquamarine3", group = 1) +
-  geom_point(aes(y = CumulativeVar), color = "aquamarine4") +
+  geom_bar(aes(y = VariancePercent), stat = "identity", fill = YlGnBu[6], width = 0.75) +
+  geom_line(aes(y = CumulativeVar), color = YlGnBu[4], group = 1, lwd = 1) +
+  geom_point(aes(y = CumulativeVar), color = YlGnBu[5], size = 3) +
   labs(x = "Number of Components", y = "Percentage of Variance",
        title = "Cumulative Percentage of Variance Explained") +
-  geom_hline(yintercept = mean(variance_percent), linetype = "dashed", color = "bisque4") +
+  geom_hline(yintercept = mean(variance_percent), linetype = "dashed", color = YlGnBu[9], lwd=1) +
   ylim(0, 100) +
   theme_minimal()+
   scale_x_continuous(breaks = seq_along(variance_percent))
@@ -305,32 +289,31 @@ p <- ggplot(data, aes(x = Components)) +
 p
 ggsave("plots/var_cumvar.pdf", p, width = 8, height = 5)
 ```
+
 Since the data is scaled, the mean eigenvalue is 1. Therefore, we will extract the first 4 principal components since they are the only components to have an eigenvalue above 1.
 
-### Correlation between dimension
+## Correlation between dimension
 
 ```{r}
 t(pca$var$cor)
 ```
 
-### correlations between dimensions
-
-
 ```{r}
 p1 <- plot.PCA(pca, axes=c(1,2), choix="var")
 p2 <- plot.PCA(pca, axes=c(2,3), choix="var")
 p3 <- plot.PCA(pca, axes=c(1,3), choix="var")
-p1
-p2
-p3
+p1; p2; p3
+
 ggsave("plots/pca_dim12.pdf", p1, width = 5, height = 5)
 ggsave("plots/pca_dim23.pdf", p2, width = 5, height = 5)
 ggsave("plots/pca_dim13.pdf", p3, width = 5, height = 5)
 ```
 
-### individual plots
+## Individual plots
 
 ```{r}
+YlGnBu_modified = c( "#edf8b1", "#7fcdbb", "#41b6c4", "#1d91c0", "#253494", "#081d58")
+
 plot_pca <- function(pca, df_pca, dim1, dim2, save = "") {
   df_temp <- data.frame(pca$ind$coord[, c(dim1, dim2)], df_pca$Type)
   colnames(df_temp) <- c("x1", "x2", "Type")
@@ -340,6 +323,7 @@ plot_pca <- function(pca, df_pca, dim1, dim2, save = "") {
     labs(x = paste("Dimension", dim1), y = paste("Dimension", dim2), color = "Type") +
     scale_shape_manual(values = c(0, 1, 2, 15, 16, 17)) +
     theme_minimal() +
+    scale_color_manual(values = YlGnBu_modified) +
     guides(color = guide_legend(override.aes = list(shape = c(0, 1, 2, 15, 16, 17))), shape = "none")
   
   if (save != "") {
@@ -352,51 +336,3 @@ plot_pca(pca, df_pca, 1, 2, save="plots/pca_scatter_ind12.pdf")
 plot_pca(pca, df_pca, 2, 3, save="plots/pca_scatter_ind23.pdf")
 plot_pca(pca, df_pca, 1, 3, save="plots/pca_scatter_ind13.pdf")
 ```
-
-
-
-
-
-
-
-.
-
-# Feature description
-
-The features in the dataset are as follows:
-
-RI: Refractive Index (continuous) - It represents the ratio of the speed of light in a vacuum to the speed of light in the glass sample. It is a measure of how much the light is bent as it passes through the glass.
-
-Na: Sodium (continuous) - It denotes the amount of sodium (in weight percent) present in the glass.
-
-Mg: Magnesium (continuous) - It represents the amount of magnesium (in weight percent) present in the glass.
-
-Al: Aluminum (continuous) - It signifies the amount of aluminum (in weight percent) present in the glass.
-
-Si: Silicon (continuous) - It denotes the amount of silicon (in weight percent) present in the glass.
-
-K: Potassium (continuous) - It represents the amount of potassium (in weight percent) present in the glass.
-
-Ca: Calcium (continuous) - It signifies the amount of calcium (in weight percent) present in the glass.
-
-Ba: Barium (continuous) - It represents the amount of barium (in weight percent) present in the glass.
-
-Fe: Iron (continuous) - It denotes the amount of iron (in weight percent) present in the glass.
-
-Type: Type of glass (discrete) - It represents the type of glass sample. There are six distinct types ranging from 1 to 7, excluding the 4th one.
-
-## Type varibale description
-
-Building_windows_float_processed: This level represents glass used for building windows that has undergone a float processing method. Float processing involves floating molten glass on a bed of molten metal to produce a smooth and flat surface.
-
-Building_windows_non_float_processed: This level represents glass used for building windows that has not undergone a float processing method. It may have been processed using alternative methods.
-
-Vehicle_windows_float_processed: This level represents glass used for vehicle windows that has undergone a float processing method. It is specifically processed for automotive applications.
-
-Vehicle_windows_non_float_processed: Although not present in this particular database, this level would represent glass used for vehicle windows that has not undergone a float processing method. Similar to the previous category, it may have been processed using alternative methods.
-
-Containers: This level represents glass used for containers such as bottles or jars.
-
-Tableware: This level represents glass used for tableware items such as plates, bowls, or glasses.
-
-Headlamps: This level represents glass used for headlamp lenses in automotive lighting systems.
