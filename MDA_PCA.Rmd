@@ -330,15 +330,26 @@ ggsave("plots/pca_dim13.pdf", p3, width = 5, height = 5)
 ### individual plots
 
 ```{r}
-# Plot the PCA with individual colors
-plot.PCA(pca, axes = c(1, 2), choix = "ind", autoLab = "auto", label = "quali")
+plot_pca <- function(pca, df_pca, dim1, dim2, save = "") {
+  df_temp <- data.frame(pca$ind$coord[, c(dim1, dim2)], df_pca$Type)
+  colnames(df_temp) <- c("x1", "x2", "Type")
 
-df_temp <- data.frame(pca$ind$coord[,c(1,2)], df_pca$Type)
+  plot <- ggplot(df_temp, aes(x = x1, y = x2, color = Type, shape = Type)) +
+    geom_point(size = 2) +
+    labs(x = paste("Component", dim1), y = paste("Component", dim2), color = "Color") +
+    scale_shape_manual(values = c(0, 1, 2, 15, 16, 17)) +
+    theme_minimal() +
+    guides(color = guide_legend(override.aes = list(shape = c(0, 1, 2, 15, 16, 17))), shape = "none")
+  
+  if (save != "") {
+    ggsave(save, plot,  width = 8, height = 6)
+  }
+  print(plot)
+}
 
-ggplot(df_temp, aes(x = Dim.1, y = Dim.2, color = df_pca.Type)) +
-  geom_point() +
-  labs(x = "X-axis", y = "Y-axis", color = "Color") +
-  theme_minimal()
+plot_pca(pca, df_pca, 1, 2, save="plots/pca_scatter_ind12.pdf")
+plot_pca(pca, df_pca, 2, 3, save="plots/pca_scatter_ind23.pdf")
+plot_pca(pca, df_pca, 1, 3, save="plots/pca_scatter_ind13.pdf")
 ```
 
 
